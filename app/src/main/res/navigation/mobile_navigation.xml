@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/mobile_navigation"
+    app:startDestination="@+id/navigation_local">
+
+    <fragment
+        android:id="@+id/navigation_local"
+        android:name="top.weixiaoweb.wxfilemanager.ui.local.LocalFragment"
+        android:label="本地文件"
+        tools:layout="@layout/fragment_file_list" />
+
+    <fragment
+        android:id="@+id/navigation_smb"
+        android:name="top.weixiaoweb.wxfilemanager.ui.smb.SmbFragment"
+        android:label="局域网 SMB"
+        tools:layout="@layout/fragment_file_list" />
+</navigation>

@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">WX文件管理器</string>
+    <string name="tab_local">本地</string>
+    <string name="tab_network">局域网</string>
+    <string name="search_hint">搜索文件…</string>
+    <string name="sort_files">排列</string>
+</resources>

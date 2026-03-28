@@ -1,0 +1,31 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Main White Folder (ES Style) -->
+    <!-- Folder Body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M20,32h24l8,8h36c2.2,0 4,1.8 4,4v34c0,2.2 -1.8,4 -4,4H20c-2.2,0 -4,-1.8 -4,-4V36c0,-2.2 1.8,-4 4,-4z"/>
+    <!-- Folder Front Cover (Slightly darker for depth) -->
+    <path
+        android:fillColor="#F5F5F5"
+        android:pathData="M16,44h76v34c0,2.2 -1.8,4 -4,4H20c-2.2,0 -4,-1.8 -4,-4z"/>
+    
+    <!-- Decorative Globe Circle (ES Style) -->
+    <path
+        android:fillColor="#E3F2FD"
+        android:pathData="M54,62m-18,0a18,18 0,1 1,36 0a18,18 0,1 1,-36 0"/>
+
+    <!-- 'WX' in ES Blue (Balanced widths) -->
+    <!-- 'W' (Center: 41, Width: 22) -->
+    <path
+        android:fillColor="@color/primary"
+        android:pathData="M30,56l4,12l3,-8l3,8l4,-12h-3l-2,7l-2,-7l-2,7l-2,-7z"/>
+    
+    <!-- 'X' (Center: 67, Width: 22) -->
+    <path
+        android:fillColor="@color/primary"
+        android:pathData="M56,56l5,6l5,-6h3l-6,8l6,8h-3l-5,-6l-5,6h-3l6,-8l-6,-8z"/>
+</vector>

@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="视图与排序"
+            android:textAppearance="@style/TextAppearance.MaterialComponents.Subtitle1"
+            android:textStyle="bold"
+            android:paddingBottom="16dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="列表模式"
+            android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+            android:paddingBottom="8dp" />
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chip_group_view_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="12dp"
+            app:chipSpacingVertical="4dp"
+            app:singleSelection="true">
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_list_small"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:chipIcon="@drawable/ic_view_list"
+                app:chipIconVisible="true"
+                app:chipIconTint="@color/primary"
+                android:text="列表(小)" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_list_medium"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:chipIcon="@drawable/ic_view_list"
+                app:chipIconVisible="true"
+                app:chipIconTint="@color/primary"
+                android:text="列表(中)" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_list_large"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:chipIcon="@drawable/ic_view_list"
+                app:chipIconVisible="true"
+                app:chipIconTint="@color/primary"
+                android:text="列表(大)" />
+        </com.google.android.material.chip.ChipGroup>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="图标模式"
+            android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+            android:paddingBottom="8dp" />
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chip_group_view_grid"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="16dp"
+            app:chipSpacingVertical="4dp"
+            app:singleSelection="true">
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_grid_small"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:chipIcon="@drawable/ic_view_grid"
+                app:chipIconVisible="true"
+                app:chipIconTint="@color/primary"
+                android:text="图标(小)" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_grid_medium"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:chipIcon="@drawable/ic_view_grid"
+                app:chipIconVisible="true"
+                app:chipIconTint="@color/primary"
+                android:text="图标(中)" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_grid_large"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:chipIcon="@drawable/ic_view_grid"
+                app:chipIconVisible="true"
+                app:chipIconTint="@color/primary"
+                android:text="图标(大)" />
+        </com.google.android.material.chip.ChipGroup>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="排序方式"
+            android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+            android:paddingBottom="8dp" />
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chip_group_sort"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:chipSpacingVertical="4dp"
+            app:singleSelection="true">
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_sort_name_asc"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:chipIcon="@drawable/ic_sort_asc"
+                app:chipIconVisible="true"
+                app:chipIconTint="@color/primary"
+                android:text="名称 (A-Z)" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_sort_name_desc"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:chipIcon="@drawable/ic_sort_desc"
+                app:chipIconVisible="true"
+                app:chipIconTint="@color/primary"
+                android:text="名称 (Z-A)" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_sort_date_desc"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:chipIcon="@drawable/ic_sort_desc"
+                app:chipIconVisible="true"
+                app:chipIconTint="@color/primary"
+                android:text="最新优先" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_sort_date_asc"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:chipIcon="@drawable/ic_sort_asc"
+                app:chipIconVisible="true"
+                app:chipIconTint="@color/primary"
+                android:text="最早优先" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_sort_size_desc"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:chipIcon="@drawable/ic_sort_desc"
+                app:chipIconVisible="true"
+                app:chipIconTint="@color/primary"
+                android:text="最大优先" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_sort_size_asc"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:chipIcon="@drawable/ic_sort_asc"
+                app:chipIconVisible="true"
+                app:chipIconTint="@color/primary"
+                android:text="大小(降序)" />
+        </com.google.android.material.chip.ChipGroup>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="16dp"
+            android:background="?android:attr/listDivider" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="存储管理"
+            android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+            android:paddingBottom="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView
+                android:id="@+id/tv_cache_size"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="缩略图缓存: 计算中..."
+                android:textAppearance="@style/TextAppearance.MaterialComponents.Body2" />
+            <Button
+                android:id="@+id/btn_clear_cache"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="清除缓存"
+                android:textColor="@android:color/holo_red_dark" />
+        </LinearLayout>
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>
