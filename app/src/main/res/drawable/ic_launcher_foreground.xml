@@ -3,29 +3,33 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Main White Folder (ES Style) -->
-    <!-- Folder Body -->
+    
+    <path
+        android:fillColor="@color/background_blue"
+        android:pathData="M0,0h108v108h-108z" />
+    
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M20,32h24l8,8h36c2.2,0 4,1.8 4,4v34c0,2.2 -1.8,4 -4,4H20c-2.2,0 -4,-1.8 -4,-4V36c0,-2.2 1.8,-4 4,-4z"/>
-    <!-- Folder Front Cover (Slightly darker for depth) -->
+        android:fillAlpha="0.1"
+        android:pathData="M0,0h108v108h-108z" />
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M18,30h26l6,6h40c2.2,0 4,1.8 4,4v36c0,2.2 -1.8,4 -4,4H18c-2.2,0 -4,-1.8 -4,-4V34c0,-2.2 1.8,-4 4,-4z"/>
+
     <path
         android:fillColor="#F5F5F5"
-        android:pathData="M16,44h76v34c0,2.2 -1.8,4 -4,4H20c-2.2,0 -4,-1.8 -4,-4z"/>
-    
-    <!-- Decorative Globe Circle (ES Style) -->
-    <path
-        android:fillColor="#E3F2FD"
-        android:pathData="M54,62m-18,0a18,18 0,1 1,36 0a18,18 0,1 1,-36 0"/>
+        android:pathData="M14,42h80v34c0,2.2 -1.8,4 -4,4H18c-2.2,0 -4,-1.8 -4,-4z"/>
 
-    <!-- 'WX' in ES Blue (Balanced widths) -->
-    <!-- 'W' (Center: 41, Width: 22) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,58m-20,0a20,20 0,1 1,40 0a20,20 0,1 1,-40 0"/>
+
     <path
         android:fillColor="@color/primary"
-        android:pathData="M30,56l4,12l3,-8l3,8l4,-12h-3l-2,7l-2,-7l-2,7l-2,-7z"/>
-    
-    <!-- 'X' (Center: 67, Width: 22) -->
+        android:pathData="M38,50l5,16l4,-10l4,10l5,-16h-4l-3,9l-2,-9l-2,9l-3,-9z"/>
+
     <path
         android:fillColor="@color/primary"
-        android:pathData="M56,56l5,6l5,-6h3l-6,8l6,8h-3l-5,-6l-5,6h-3l6,-8l-6,-8z"/>
+        android:pathData="M58,50l6,8l-6,8h4l4,-5l4,5h4l-6,-8l6,-8h-4l-4,5l-4,-5z"/>
 </vector>

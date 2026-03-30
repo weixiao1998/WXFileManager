@@ -81,6 +81,35 @@
                 android:src="@android:drawable/ic_media_play"
                 android:tint="@android:color/white" />
 
+            <TextView
+                android:id="@+id/tv_seek_hint_portrait"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:background="#80000000"
+                android:paddingStart="16dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="8dp"
+                android:textColor="@android:color/white"
+                android:textSize="18sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tv_speed_hint_portrait"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="60dp"
+                android:background="#40000000"
+                android:paddingStart="8dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="2dp"
+                android:textColor="#CCCCCC"
+                android:textSize="11sp"
+                android:visibility="gone" />
+
             <LinearLayout
                 android:id="@+id/bottom_controls_portrait"
                 android:layout_width="match_parent"
@@ -103,11 +132,11 @@
                 <SeekBar
                     android:id="@+id/seekbar_portrait"
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
+                    android:layout_height="36dp"
                     android:layout_marginStart="8dp"
                     android:layout_marginEnd="8dp"
                     android:layout_weight="1"
-                    android:max="100"
+                    android:max="1000"
                     android:maxHeight="4dp"
                     android:minHeight="4dp"
                     android:progressDrawable="@drawable/seekbar_progress"
@@ -243,6 +272,35 @@
             android:src="@android:drawable/ic_media_play"
             android:tint="@android:color/white" />
 
+        <TextView
+            android:id="@+id/tv_seek_hint_landscape"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="#80000000"
+            android:paddingStart="20dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="10dp"
+            android:textColor="@android:color/white"
+            android:textSize="22sp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tv_speed_hint_landscape"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="80dp"
+            android:background="#40000000"
+            android:paddingStart="10dp"
+            android:paddingTop="3dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="3dp"
+            android:textColor="#CCCCCC"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
         <LinearLayout
             android:id="@+id/bottom_controls_landscape"
             android:layout_width="match_parent"
@@ -265,11 +323,11 @@
             <SeekBar
                 android:id="@+id/seekbar_landscape"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="40dp"
                 android:layout_marginStart="8dp"
                 android:layout_marginEnd="8dp"
                 android:layout_weight="1"
-                android:max="100"
+                android:max="1000"
                 android:maxHeight="4dp"
                 android:minHeight="4dp"
                 android:progressDrawable="@drawable/seekbar_progress"

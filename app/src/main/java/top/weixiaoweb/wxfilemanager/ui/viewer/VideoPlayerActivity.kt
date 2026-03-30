@@ -63,25 +63,41 @@ class VideoPlayerActivity : AppCompatActivity() {
     private val longPressRunnable = Runnable {
         player?.playbackParameters = PlaybackParameters(2.0f)
         isFastForwarding = true
-        Toast.makeText(this, "2x 速度播放中...", Toast.LENGTH_SHORT).show()
+        showSpeedHint(true)
     }
     
     private var videoList: List<FileModel> = emptyList()
     private var currentPosition = 0
     private lateinit var episodeAdapter: VideoEpisodeAdapter
     
+    private var touchStartX = 0f
+    private var touchStartY = 0f
+    private var isSeeking = false
+    private var seekStartMs = 0L
+    
+    private val seekHintHandler = Handler(Looper.getMainLooper())
+    private val hideSeekHintRunnable = Runnable {
+        if (isLandscape) {
+            binding.tvSeekHintLandscape.visibility = View.GONE
+        } else {
+            binding.tvSeekHintPortrait.visibility = View.GONE
+        }
+    }
+    
     private val handler = Handler(Looper.getMainLooper())
     private val updateProgressRunnable = object : Runnable {
         override fun run() {
-            player?.let { exoPlayer ->
-                if (exoPlayer.duration > 0) {
-                    val progress = ((exoPlayer.currentPosition * 100) / exoPlayer.duration).toInt()
-                    if (isLandscape) {
-                        binding.seekbarLandscape.progress = progress
-                        binding.tvCurrentTimeLandscape.text = formatTime(exoPlayer.currentPosition)
-                    } else {
-                        binding.seekbarPortrait.progress = progress
-                        binding.tvCurrentTimePortrait.text = formatTime(exoPlayer.currentPosition)
+            if (!isSeeking) {
+                player?.let { exoPlayer ->
+                    if (exoPlayer.duration > 0) {
+                        val progress = ((exoPlayer.currentPosition * 1000) / exoPlayer.duration).toInt()
+                        if (isLandscape) {
+                            binding.seekbarLandscape.progress = progress
+                            binding.tvCurrentTimeLandscape.text = formatTime(exoPlayer.currentPosition)
+                        } else {
+                            binding.seekbarPortrait.progress = progress
+                            binding.tvCurrentTimePortrait.text = formatTime(exoPlayer.currentPosition)
+                        }
                     }
                 }
             }
@@ -165,7 +181,7 @@ class VideoPlayerActivity : AppCompatActivity() {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
                     val duration = player?.duration ?: 0
-                    val position = (progress * duration) / 100
+                    val position = (progress * duration) / 1000
                     player?.seekTo(position)
                 }
             }
@@ -177,7 +193,7 @@ class VideoPlayerActivity : AppCompatActivity() {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
                     val duration = player?.duration ?: 0
-                    val position = (progress * duration) / 100
+                    val position = (progress * duration) / 1000
                     player?.seekTo(position)
                 }
             }
@@ -207,14 +223,59 @@ class VideoPlayerActivity : AppCompatActivity() {
         val touchListener = View.OnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    touchStartX = event.x
+                    touchStartY = event.y
+                    seekStartMs = player?.currentPosition ?: 0
+                    isSeeking = false
                     longPressHandler.postDelayed(longPressRunnable, 500)
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (!isFastForwarding) {
+                        val deltaX = event.x - touchStartX
+                        val deltaY = event.y - touchStartY
+                        
+                        if (kotlin.math.abs(deltaX) > 50 && kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY) * 2) {
+                            if (!isSeeking) {
+                                isSeeking = true
+                                longPressHandler.removeCallbacks(longPressRunnable)
+                                showControlsForSeek()
+                            }
+                            
+                            val duration = player?.duration ?: 0
+                            if (duration > 0) {
+                                val seekRange = 60_000L
+                                val viewWidth = if (isLandscape) binding.playerViewLandscape.width else binding.playerViewPortrait.width
+                                val seekDelta = (deltaX / viewWidth * seekRange).toLong()
+                                val newPosition = (seekStartMs + seekDelta).coerceIn(0, duration)
+                                
+                                showSeekHint(newPosition, seekDelta)
+                            }
+                        }
+                    }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     longPressHandler.removeCallbacks(longPressRunnable)
+                    
+                    if (isSeeking) {
+                        val deltaX = event.x - touchStartX
+                        val duration = player?.duration ?: 0
+                        if (duration > 0) {
+                            val seekRange = 60_000L
+                            val viewWidth = if (isLandscape) binding.playerViewLandscape.width else binding.playerViewPortrait.width
+                            val seekDelta = (deltaX / viewWidth * seekRange).toLong()
+                            val newPosition = (seekStartMs + seekDelta).coerceIn(0, duration)
+                            player?.seekTo(newPosition)
+                        }
+                        isSeeking = false
+                        seekHintHandler.removeCallbacks(hideSeekHintRunnable)
+                        seekHintHandler.postDelayed(hideSeekHintRunnable, 500)
+                        scheduleHideControls()
+                    }
+                    
                     if (isFastForwarding) {
                         player?.playbackParameters = PlaybackParameters(1.0f)
                         isFastForwarding = false
-                        Toast.makeText(this, "恢复正常播放", Toast.LENGTH_SHORT).show()
+                        showSpeedHint(false)
                     }
                 }
             }
@@ -223,6 +284,44 @@ class VideoPlayerActivity : AppCompatActivity() {
         
         binding.playerViewPortrait.setOnTouchListener(touchListener)
         binding.playerViewLandscape.setOnTouchListener(touchListener)
+    }
+    
+    private fun showSeekHint(positionMs: Long, deltaMs: Long) {
+        val hintView = if (isLandscape) binding.tvSeekHintLandscape else binding.tvSeekHintPortrait
+        val sign = if (deltaMs >= 0) "+" else ""
+        val timeStr = formatTimeFull(kotlin.math.abs(deltaMs))
+        val positionStr = formatTimeFull(positionMs)
+        hintView.text = "$sign$timeStr\n$positionStr"
+        hintView.visibility = View.VISIBLE
+        
+        val duration = player?.duration ?: 0
+        if (duration > 0) {
+            val progress = ((positionMs * 1000) / duration).toInt()
+            if (isLandscape) {
+                binding.seekbarLandscape.progress = progress
+                binding.tvCurrentTimeLandscape.text = formatTime(positionMs)
+            } else {
+                binding.seekbarPortrait.progress = progress
+                binding.tvCurrentTimePortrait.text = formatTime(positionMs)
+            }
+        }
+    }
+    
+    private fun showSpeedHint(show: Boolean) {
+        val hintView = if (isLandscape) binding.tvSpeedHintLandscape else binding.tvSpeedHintPortrait
+        if (show) {
+            hintView.text = "2x 倍速播放中"
+            hintView.visibility = View.VISIBLE
+        } else {
+            hintView.visibility = View.GONE
+        }
+    }
+    
+    private fun formatTimeFull(ms: Long): String {
+        val totalSeconds = ms / 1000
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
     }
     
     private fun setupEpisodeList() {
@@ -503,6 +602,41 @@ class VideoPlayerActivity : AppCompatActivity() {
         }
         
         handler.postDelayed(hideControlsRunnable, 5000)
+    }
+    
+    private fun showControlsForSeek() {
+        controlsVisible = true
+        handler.removeCallbacks(hideControlsRunnable)
+        
+        if (isLandscape) {
+            binding.topBarLandscape.animate().cancel()
+            binding.topMaskLandscape.animate().cancel()
+            binding.bottomControlsLandscape.animate().cancel()
+            
+            binding.topBarLandscape.visibility = View.VISIBLE
+            binding.topMaskLandscape.visibility = View.VISIBLE
+            binding.bottomControlsLandscape.visibility = View.VISIBLE
+            
+            binding.topBarLandscape.alpha = 1f
+            binding.topMaskLandscape.alpha = 1f
+            binding.bottomControlsLandscape.alpha = 1f
+        } else {
+            binding.topBarPortrait.animate().cancel()
+            binding.topMaskPortrait.animate().cancel()
+            binding.bottomControlsPortrait.animate().cancel()
+            
+            binding.topBarPortrait.visibility = View.VISIBLE
+            binding.topMaskPortrait.visibility = View.VISIBLE
+            binding.bottomControlsPortrait.visibility = View.VISIBLE
+            
+            binding.topBarPortrait.alpha = 1f
+            binding.topMaskPortrait.alpha = 1f
+            binding.bottomControlsPortrait.alpha = 1f
+        }
+    }
+    
+    private fun scheduleHideControls() {
+        handler.postDelayed(hideControlsRunnable, 3000)
     }
     
     private val hideControlsRunnable = Runnable { hideControls() }
