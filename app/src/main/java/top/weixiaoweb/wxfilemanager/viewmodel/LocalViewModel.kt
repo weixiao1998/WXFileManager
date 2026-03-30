@@ -163,4 +163,9 @@ class LocalViewModel(application: Application) : AndroidViewModel(application) {
         }
         return false
     }
+    
+    fun getParentPath(): String? {
+        val current = _currentPath.value ?: return null
+        return File(current).parentFile?.absolutePath
+    }
 }

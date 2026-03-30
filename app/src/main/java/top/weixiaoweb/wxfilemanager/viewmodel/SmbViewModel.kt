@@ -40,6 +40,9 @@ class SmbViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentShare = MutableLiveData<String?>(null)
     val currentShare: LiveData<String?> = _currentShare
 
+    private val _currentServer = MutableLiveData<SmbServer?>(null)
+    val currentServer: LiveData<SmbServer?> = _currentServer
+
     private val _loading = MutableLiveData<Boolean>()
     val loading: LiveData<Boolean> = _loading
 
@@ -115,7 +118,9 @@ class SmbViewModel(application: Application) : AndroidViewModel(application) {
                 val result = SmbManager.connect(host, user, pass, share)
                 _connected.value = result
                 if (result) {
-                    saveServer(SmbServer(host, user, pass))
+                    val server = SmbServer(host, user, pass)
+                    saveServer(server)
+                    _currentServer.value = server
                     
                     // Save last connection for recovery
                     prefs.edit().apply {
@@ -304,6 +309,13 @@ class SmbViewModel(application: Application) : AndroidViewModel(application) {
             }
             else -> return false
         }
+    }
+    
+    fun getParentPath(): String? {
+        val current = _currentPath.value ?: return null
+        if (current.isEmpty()) return null
+        val lastBackslash = current.lastIndexOf('\\')
+        return if (lastBackslash == -1) "" else current.substring(0, lastBackslash)
     }
 
     override fun onCleared() {

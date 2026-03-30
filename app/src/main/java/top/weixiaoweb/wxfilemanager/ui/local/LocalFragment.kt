@@ -15,6 +15,7 @@ import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +27,7 @@ import com.google.android.material.tabs.TabLayout
 import top.weixiaoweb.wxfilemanager.R
 import top.weixiaoweb.wxfilemanager.adapter.FileAdapter
 import top.weixiaoweb.wxfilemanager.databinding.FragmentFileListBinding
+import android.util.Log
 import top.weixiaoweb.wxfilemanager.model.FileModel
 import top.weixiaoweb.wxfilemanager.utils.SafManager
 import top.weixiaoweb.wxfilemanager.viewmodel.LocalViewModel
@@ -37,6 +39,8 @@ class LocalFragment : Fragment() {
     private val viewModel: LocalViewModel by viewModels()
     private lateinit var adapter: FileAdapter
     private val loadingRunnable = Runnable { binding.loadingIndicator.visibility = View.VISIBLE }
+    
+    private val scrollPositions = mutableMapOf<String, Int>()
 
     private val safLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -65,6 +69,7 @@ class LocalFragment : Fragment() {
 
         adapter = FileAdapter { file ->
             if (file.isDirectory) {
+                saveScrollPosition()
                 viewModel.loadFiles(file.path)
             } else {
                 handleFileClick(file)
@@ -75,23 +80,25 @@ class LocalFragment : Fragment() {
         binding.recyclerView.adapter = adapter
 
         viewModel.filteredFiles.observe(viewLifecycleOwner) { files ->
-            adapter.submitList(files)
-            binding.emptyText.visibility = if (files.isEmpty()) View.VISIBLE else View.GONE
+            adapter.submitList(files) {
+                binding.emptyText.visibility = if (files.isEmpty()) View.VISIBLE else View.GONE
+                if (!viewModel.loading.value!!) {
+                    restoreScrollPosition()
+                }
+            }
         }
 
         viewModel.viewMode.observe(viewLifecycleOwner) { mode ->
             adapter.setViewMode(mode)
             updateRecyclerViewLayout(mode)
         }
-
+        
         viewModel.loading.observe(viewLifecycleOwner) { loading ->
             if (!loading) {
                 binding.swipeRefresh.isRefreshing = false
-                // If loading finishes, remove any pending show-indicator callbacks
                 binding.loadingIndicator.removeCallbacks(loadingRunnable)
                 binding.loadingIndicator.visibility = View.GONE
             } else {
-                // Delay showing the indicator to avoid flickering for fast loads
                 binding.loadingIndicator.removeCallbacks(loadingRunnable)
                 binding.loadingIndicator.postDelayed(loadingRunnable, 300)
             }
@@ -118,6 +125,7 @@ class LocalFragment : Fragment() {
 
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                saveScrollPosition()
                 if (!viewModel.navigateUp()) {
                     isEnabled = false
                     requireActivity().onBackPressedDispatcher.onBackPressed()
@@ -271,6 +279,7 @@ class LocalFragment : Fragment() {
             crumbBinding.breadcrumbDivider.visibility = if (i == crumbs.size - 1) View.GONE else View.VISIBLE
             
             crumbBinding.root.setOnClickListener {
+                saveScrollPosition()
                 viewModel.loadFiles(crumb.path)
             }
             binding.breadcrumbContainer.addView(crumbBinding.root)
@@ -304,6 +313,27 @@ class LocalFragment : Fragment() {
             startActivity(intent)
         } else {
             Toast.makeText(context, "Opening file: ${file.name}", Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    private fun saveScrollPosition() {
+        val currentPath = viewModel.currentPath.value ?: return
+        val layoutManager = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val position = layoutManager.findFirstVisibleItemPosition()
+        if (position != RecyclerView.NO_POSITION) {
+            scrollPositions[currentPath] = position
+            Log.d("LocalFragment", "saveScrollPosition: path=$currentPath, position=$position")
+        }
+    }
+    
+    private fun restoreScrollPosition() {
+        val currentPath = viewModel.currentPath.value ?: return
+        val position = scrollPositions[currentPath]
+        Log.d("LocalFragment", "restoreScrollPosition: path=$currentPath, savedPosition=$position, allPositions=$scrollPositions")
+        if (position != null) {
+            val layoutManager = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return
+            layoutManager.scrollToPositionWithOffset(position, 0)
+            Log.d("LocalFragment", "restoreScrollPosition done: position=$position")
         }
     }
 

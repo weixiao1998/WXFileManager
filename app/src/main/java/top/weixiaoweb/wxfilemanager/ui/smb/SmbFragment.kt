@@ -12,6 +12,7 @@ import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,6 +36,8 @@ class SmbFragment : Fragment() {
     private val viewModel: SmbViewModel by viewModels()
     private lateinit var adapter: FileAdapter
     private val loadingRunnable = Runnable { binding.loadingIndicator.visibility = View.VISIBLE }
+    
+    private val scrollPositions = mutableMapOf<String, Int>()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -57,8 +60,12 @@ class SmbFragment : Fragment() {
 
         viewModel.filteredFiles.observe(viewLifecycleOwner) { files ->
             if (viewModel.viewState.value != SmbViewModel.ViewState.SERVERS) {
-                adapter.submitList(files)
-                binding.emptyText.visibility = if (files.isEmpty()) View.VISIBLE else View.GONE
+                adapter.submitList(files) {
+                    binding.emptyText.visibility = if (files.isEmpty()) View.VISIBLE else View.GONE
+                    if (!viewModel.loading.value!!) {
+                        restoreScrollPosition()
+                    }
+                }
             }
         }
 
@@ -78,7 +85,11 @@ class SmbFragment : Fragment() {
                 SmbViewModel.ViewState.SERVERS -> {
                     showServers(viewModel.servers.value ?: emptyList())
                 }
-                SmbViewModel.ViewState.SHARES, SmbViewModel.ViewState.FILES -> {
+                SmbViewModel.ViewState.SHARES -> {
+                    adapter.submitList(viewModel.filteredFiles.value)
+                    binding.emptyText.visibility = if (viewModel.filteredFiles.value?.isEmpty() == true) View.VISIBLE else View.GONE
+                }
+                SmbViewModel.ViewState.FILES -> {
                     adapter.submitList(viewModel.filteredFiles.value)
                     binding.emptyText.visibility = if (viewModel.filteredFiles.value?.isEmpty() == true) View.VISIBLE else View.GONE
                 }
@@ -134,6 +145,7 @@ class SmbFragment : Fragment() {
 
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                saveScrollPosition()
                 if (!viewModel.navigateUp()) {
                     isEnabled = false
                     requireActivity().onBackPressedDispatcher.onBackPressed()
@@ -272,10 +284,12 @@ class SmbFragment : Fragment() {
                 }
             }
             SmbViewModel.ViewState.SHARES -> {
+                saveScrollPosition()
                 viewModel.selectShare(file.name)
             }
             SmbViewModel.ViewState.FILES -> {
                 if (file.isDirectory) {
+                    saveScrollPosition()
                     viewModel.loadFiles(file.path)
                 } else {
                     handleFileClick(file)
@@ -322,9 +336,9 @@ class SmbFragment : Fragment() {
             crumbBinding.breadcrumbDivider.visibility = if (i == crumbs.size - 1) View.GONE else View.VISIBLE
             
             crumbBinding.root.setOnClickListener {
+                saveScrollPosition()
                 if (crumb.share == null) {
-                    // Back to server list
-                    viewModel.navigateUp() // This is a bit simplified
+                    viewModel.navigateUp()
                 } else if (crumb.path.isEmpty()) {
                     viewModel.selectShare(crumb.share)
                 } else {
@@ -411,6 +425,30 @@ class SmbFragment : Fragment() {
                 }
             }
         }
+    }
+    
+    private fun saveScrollPosition() {
+        val key = when (viewModel.viewState.value) {
+            SmbViewModel.ViewState.SHARES -> "shares_${viewModel.currentServer.value?.host ?: ""}"
+            SmbViewModel.ViewState.FILES -> viewModel.currentPath.value ?: ""
+            else -> return
+        }
+        val layoutManager = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val position = layoutManager.findFirstVisibleItemPosition()
+        if (position != RecyclerView.NO_POSITION) {
+            scrollPositions[key] = position
+        }
+    }
+    
+    private fun restoreScrollPosition() {
+        val key = when (viewModel.viewState.value) {
+            SmbViewModel.ViewState.SHARES -> "shares_${viewModel.currentServer.value?.host ?: ""}"
+            SmbViewModel.ViewState.FILES -> viewModel.currentPath.value ?: ""
+            else -> return
+        }
+        val position = scrollPositions[key] ?: return
+        val layoutManager = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return
+        layoutManager.scrollToPositionWithOffset(position, 0)
     }
 
     override fun onDestroyView() {
