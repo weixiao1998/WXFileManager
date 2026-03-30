@@ -476,20 +476,24 @@ class VideoPlayerActivity : AppCompatActivity() {
                 if (isSmbFile) {
                     val retriever = MediaMetadataRetriever()
                     val smbFile = SmbManager.openFile(currentPath)
-                    if (smbFile != null) {
-                        val tempFile = JFile(cacheDir, "temp_video_info")
-                        smbFile.inputStream.use { input ->
-                            tempFile.outputStream().use { output ->
-                                input.copyTo(output)
+                    var tempFile: JFile? = null
+                    try {
+                        if (smbFile != null) {
+                            tempFile = JFile(cacheDir, "temp_video_info_${System.currentTimeMillis()}")
+                            smbFile.inputStream.use { input ->
+                                tempFile.outputStream().use { output ->
+                                    input.copyTo(output)
+                                }
                             }
+                            retriever.setDataSource(tempFile.absolutePath)
+                            width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toInt() ?: 0
+                            height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toInt() ?: 0
+                            duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0
+                            fileSize = tempFile.length()
                         }
-                        retriever.setDataSource(tempFile.absolutePath)
-                        width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toInt() ?: 0
-                        height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toInt() ?: 0
-                        duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0
-                        fileSize = tempFile.length()
-                        tempFile.delete()
-                        smbFile.close()
+                    } finally {
+                        tempFile?.delete()
+                        smbFile?.close()
                         retriever.release()
                     }
                 } else {

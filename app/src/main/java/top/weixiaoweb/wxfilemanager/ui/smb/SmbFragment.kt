@@ -236,7 +236,8 @@ class SmbFragment : Fragment() {
 
     private fun updateCacheSize(binding: top.weixiaoweb.wxfilemanager.databinding.DialogViewSettingsBinding) {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            val size = getDirSize(requireContext().cacheDir) + (requireContext().externalCacheDir?.let { getDirSize(it) } ?: 0L)
+            val glideCacheDir = java.io.File(requireContext().cacheDir, "image_manager_disk_cache")
+            val size = if (glideCacheDir.exists()) getDirSize(glideCacheDir) else 0L
             val sizeStr = android.text.format.Formatter.formatFileSize(requireContext(), size)
             withContext(kotlinx.coroutines.Dispatchers.Main) {
                 binding.tvCacheSize.text = "缩略图缓存: $sizeStr"

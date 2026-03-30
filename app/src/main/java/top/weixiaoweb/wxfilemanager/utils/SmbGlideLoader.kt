@@ -26,13 +26,11 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
         height: Int,
         options: Options
     ): ModelLoader.LoadData<InputStream>? {
-        // Skip AVI and WMV files explicitly as they fail on many devices over SMB
         val nameLower = model.name.lowercase()
         if (nameLower.endsWith(".avi") || nameLower.endsWith(".wmv")) {
             return null
         }
-        // Use path and lastModified as the key for better caching
-        val cacheKey = "${model.path}_${model.lastModified}"
+        val cacheKey = "${model.path}_${model.size}"
         return ModelLoader.LoadData(ObjectKey(cacheKey), SmbDataFetcher(model, width, height))
     }
 
