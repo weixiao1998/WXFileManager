@@ -35,6 +35,32 @@ object SmbManager {
     private var lastConnectionTime: Long = 0
     private val connectionTimeout: Long = 60_000L
     private val reconnectLock = Any()
+    
+    private val directoryCache = mutableMapOf<String, CacheEntry>()
+    private val cacheLock = Any()
+    private val cacheExpiryTime: Long = 30_000L
+    
+    data class CacheEntry(
+        val files: List<FileModel>,
+        val timestamp: Long
+    )
+    
+    fun clearCache() {
+        synchronized(cacheLock) {
+            directoryCache.clear()
+        }
+    }
+    
+    private fun getCacheKey(path: String): String {
+        val share = lastShare ?: ""
+        return "$share:$path"
+    }
+
+    fun clearCacheForPath(path: String) {
+        synchronized(cacheLock) {
+            directoryCache.remove(getCacheKey(path))
+        }
+    }
 
     fun isConnected(): Boolean {
         synchronized(reconnectLock) {
@@ -197,6 +223,9 @@ object SmbManager {
             diskShare?.close()
             diskShare = currentSession.connectShare(share) as? DiskShare
             lastShare = share
+            
+            clearCache()
+            
             if (diskShare != null) {
                 lastConnectionTime = System.currentTimeMillis()
                 true
@@ -209,17 +238,26 @@ object SmbManager {
         }
     }
 
-    suspend fun listFiles(path: String): List<FileModel> = withContext(Dispatchers.IO) {
+    suspend fun listFiles(path: String, useCache: Boolean = true): List<FileModel> = withContext(Dispatchers.IO) {
+        val cacheKey = getCacheKey(path)
+        
+        if (useCache) {
+            synchronized(cacheLock) {
+                val cached = directoryCache[cacheKey]
+                if (cached != null && System.currentTimeMillis() - cached.timestamp < cacheExpiryTime) {
+                    return@withContext cached.files
+                }
+            }
+        }
+        
         if (!ensureConnected()) return@withContext emptyList()
         
         var share = diskShare ?: return@withContext emptyList()
         
         try {
-            // Attempt to list files. If it fails, try to reconnect and retry once.
             val fileList = try {
                 share.list(path)
             } catch (e: Exception) {
-                // Potential connection loss, try to reconnect
                 if (ensureConnected()) {
                     share = diskShare ?: return@withContext emptyList()
                     share.list(path)
@@ -228,9 +266,9 @@ object SmbManager {
                 }
             }
 
-            fileList.filter { it.fileName != "." && it.fileName != ".." }
+            val result = fileList.filter { it.fileName != "." && it.fileName != ".." }
                 .map { fileInfo ->
-                    val isDirectory = fileInfo.fileAttributes.and(0x10L) != 0L // SMB2_FILE_ATTRIBUTE_DIRECTORY
+                    val isDirectory = fileInfo.fileAttributes.and(0x10L) != 0L
                     val fullPath = if (path.isEmpty()) fileInfo.fileName else "$path\\${fileInfo.fileName}"
                     val extension = fileInfo.fileName.substringAfterLast('.', "").lowercase()
                     val mimeType = if (isDirectory) null else MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
@@ -243,10 +281,16 @@ object SmbManager {
                         lastModified = fileInfo.changeTime.toEpochMillis(),
                         mimeType = mimeType,
                         isSmb = true,
-                        smbUrl = "smb://$fullPath" // Placeholder
+                        smbUrl = "smb://$fullPath"
                     )
                 }
                 .sortedWith(compareByDescending<FileModel> { it.isDirectory }.thenBy { it.name.lowercase() })
+            
+            synchronized(cacheLock) {
+                directoryCache[cacheKey] = CacheEntry(result, System.currentTimeMillis())
+            }
+            
+            result
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()

@@ -137,7 +137,8 @@ class SmbFragment : Fragment() {
                     binding.swipeRefresh.isRefreshing = false
                 }
                 SmbViewModel.ViewState.FILES -> {
-                    viewModel.loadFiles(viewModel.currentPath.value ?: "")
+                    SmbManager.clearCacheForPath(viewModel.currentPath.value ?: "")
+                    viewModel.loadFiles(viewModel.currentPath.value ?: "", useCache = false)
                 }
                 else -> binding.swipeRefresh.isRefreshing = false
             }
@@ -220,12 +221,31 @@ class SmbFragment : Fragment() {
 
         // Cache Management
         updateCacheSize(dialogView)
-        dialogView.btnClearCache.setOnClickListener {
-            com.bumptech.glide.Glide.get(requireContext()).clearMemory()
+        
+        dialogView.btnClearThumbnailCache.setOnClickListener {
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                 com.bumptech.glide.Glide.get(requireContext()).clearDiskCache()
                 withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    Toast.makeText(context, "缓存已清理", Toast.LENGTH_SHORT).show()
+                    com.bumptech.glide.Glide.get(requireContext()).clearMemory()
+                    Toast.makeText(context, "缩略图缓存已清理", Toast.LENGTH_SHORT).show()
+                    updateCacheSize(dialogView)
+                }
+            }
+        }
+        
+        dialogView.btnClearTempCache.setOnClickListener {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                val cacheDir = requireContext().cacheDir
+                val glideCacheDir = java.io.File(cacheDir, "image_manager_disk_cache")
+                
+                cacheDir.listFiles()?.forEach { file ->
+                    if (file.name != ".nomedia" && file.name != "image_manager_disk_cache") {
+                        deleteRecursively(file)
+                    }
+                }
+                
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    Toast.makeText(context, "临时文件已清理", Toast.LENGTH_SHORT).show()
                     updateCacheSize(dialogView)
                 }
             }
@@ -236,11 +256,24 @@ class SmbFragment : Fragment() {
 
     private fun updateCacheSize(binding: top.weixiaoweb.wxfilemanager.databinding.DialogViewSettingsBinding) {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            val glideCacheDir = java.io.File(requireContext().cacheDir, "image_manager_disk_cache")
-            val size = if (glideCacheDir.exists()) getDirSize(glideCacheDir) else 0L
-            val sizeStr = android.text.format.Formatter.formatFileSize(requireContext(), size)
+            val cacheDir = requireContext().cacheDir
+            val glideCacheDir = java.io.File(cacheDir, "image_manager_disk_cache")
+            
+            val thumbnailSize = if (glideCacheDir.exists()) getDirSize(glideCacheDir) else 0L
+            
+            var tempSize = 0L
+            cacheDir.listFiles()?.forEach { file ->
+                if (file.name != ".nomedia" && file.name != "image_manager_disk_cache") {
+                    tempSize += if (file.isDirectory) getDirSize(file) else file.length()
+                }
+            }
+            
+            val thumbnailSizeStr = android.text.format.Formatter.formatFileSize(requireContext(), thumbnailSize)
+            val tempSizeStr = android.text.format.Formatter.formatFileSize(requireContext(), tempSize)
+            
             withContext(kotlinx.coroutines.Dispatchers.Main) {
-                binding.tvCacheSize.text = "缩略图缓存: $sizeStr"
+                binding.tvThumbnailCacheSize.text = "缩略图缓存: $thumbnailSizeStr"
+                binding.tvTempCacheSize.text = "临时文件: $tempSizeStr"
             }
         }
     }
@@ -251,6 +284,13 @@ class SmbFragment : Fragment() {
             size += if (file.isDirectory) getDirSize(file) else file.length()
         }
         return size
+    }
+
+    private fun deleteRecursively(file: java.io.File) {
+        if (file.isDirectory) {
+            file.listFiles()?.forEach { deleteRecursively(it) }
+        }
+        file.delete()
     }
 
     private fun showSortAndViewModeMenu(view: View) {

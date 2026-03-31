@@ -191,20 +191,42 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical"
+            android:paddingBottom="8dp">
             <TextView
-                android:id="@+id/tv_cache_size"
+                android:id="@+id/tv_thumbnail_cache_size"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="缩略图缓存: 计算中..."
                 android:textAppearance="@style/TextAppearance.MaterialComponents.Body2" />
             <Button
-                android:id="@+id/btn_clear_cache"
+                android:id="@+id/btn_clear_thumbnail_cache"
                 style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="清除缓存"
+                android:text="清除"
+                android:textColor="@color/primary" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView
+                android:id="@+id/tv_temp_cache_size"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="临时文件: 计算中..."
+                android:textAppearance="@style/TextAppearance.MaterialComponents.Body2" />
+            <Button
+                android:id="@+id/btn_clear_temp_cache"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="清除"
                 android:textColor="@android:color/holo_red_dark" />
         </LinearLayout>
     </LinearLayout>

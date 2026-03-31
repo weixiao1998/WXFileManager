@@ -5,8 +5,6 @@ import android.animation.AnimatorListenerAdapter
 import android.annotation.SuppressLint
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
-import android.graphics.Bitmap
-import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -61,9 +59,11 @@ class VideoPlayerActivity : AppCompatActivity() {
     private lateinit var gestureDetector: GestureDetector
     private val longPressHandler = Handler(Looper.getMainLooper())
     private val longPressRunnable = Runnable {
-        player?.playbackParameters = PlaybackParameters(2.0f)
-        isFastForwarding = true
-        showSpeedHint(true)
+        if (player?.isPlaying == true) {
+            player?.playbackParameters = PlaybackParameters(3.0f)
+            isFastForwarding = true
+            showSpeedHint(true)
+        }
     }
     
     private var videoList: List<FileModel> = emptyList()
@@ -227,7 +227,9 @@ class VideoPlayerActivity : AppCompatActivity() {
                     touchStartY = event.y
                     seekStartMs = player?.currentPosition ?: 0
                     isSeeking = false
-                    longPressHandler.postDelayed(longPressRunnable, 500)
+                    if (player?.isPlaying == true) {
+                        longPressHandler.postDelayed(longPressRunnable, 500)
+                    }
                 }
                 MotionEvent.ACTION_MOVE -> {
                     if (!isFastForwarding) {
@@ -310,7 +312,7 @@ class VideoPlayerActivity : AppCompatActivity() {
     private fun showSpeedHint(show: Boolean) {
         val hintView = if (isLandscape) binding.tvSpeedHintLandscape else binding.tvSpeedHintPortrait
         if (show) {
-            hintView.text = "2x 倍速播放中"
+            hintView.text = "3x 倍速播放中"
             hintView.visibility = View.VISIBLE
         } else {
             hintView.visibility = View.GONE
@@ -466,46 +468,26 @@ class VideoPlayerActivity : AppCompatActivity() {
     }
     
     private fun updateVideoInfo() {
-        CoroutineScope(Dispatchers.IO).launch {
+        CoroutineScope(Dispatchers.Main).launch {
             try {
-                var width = 0
-                var height = 0
-                var duration = 0L
-                var fileSize = 0L
+                val duration = player?.duration ?: 0
+                val videoSize = player?.videoSize
+                val width = videoSize?.width ?: 0
+                val height = videoSize?.height ?: 0
                 
-                if (isSmbFile) {
-                    val retriever = MediaMetadataRetriever()
-                    val smbFile = SmbManager.openFile(currentPath)
-                    var tempFile: JFile? = null
-                    try {
-                        if (smbFile != null) {
-                            tempFile = JFile(cacheDir, "temp_video_info_${System.currentTimeMillis()}")
-                            smbFile.inputStream.use { input ->
-                                tempFile.outputStream().use { output ->
-                                    input.copyTo(output)
-                                }
-                            }
-                            retriever.setDataSource(tempFile.absolutePath)
-                            width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toInt() ?: 0
-                            height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toInt() ?: 0
-                            duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0
-                            fileSize = tempFile.length()
+                var fileSize = 0L
+                withContext(Dispatchers.IO) {
+                    if (isSmbFile) {
+                        val smbFile = SmbManager.openFile(currentPath)
+                        try {
+                            fileSize = smbFile?.fileInformation?.standardInformation?.endOfFile ?: 0L
+                        } finally {
+                            smbFile?.close()
                         }
-                    } finally {
-                        tempFile?.delete()
-                        smbFile?.close()
-                        retriever.release()
+                    } else {
+                        val file = JFile(currentPath)
+                        fileSize = if (file.exists()) file.length() else 0L
                     }
-                } else {
-                    val retriever = MediaMetadataRetriever()
-                    retriever.setDataSource(currentPath)
-                    width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toInt() ?: 0
-                    height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toInt() ?: 0
-                    duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0
-                    retriever.release()
-                    
-                    val file = JFile(currentPath)
-                    fileSize = file.length()
                 }
                 
                 val durationStr = if (duration > 0) {
@@ -524,9 +506,7 @@ class VideoPlayerActivity : AppCompatActivity() {
                     "$durationStr · $sizeStr"
                 }
                 
-                withContext(Dispatchers.Main) {
-                    binding.tvVideoInfo.text = infoStr
-                }
+                binding.tvVideoInfo.text = infoStr
             } catch (e: Exception) {
                 e.printStackTrace()
             }

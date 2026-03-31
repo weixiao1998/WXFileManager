@@ -10,7 +10,7 @@ import com.bumptech.glide.module.AppGlideModule
 class WXGlideModule : AppGlideModule() {
     
     override fun applyOptions(context: Context, builder: GlideBuilder) {
-        val diskCacheSizeBytes: Long = 300 * 1024 * 1024
+        val diskCacheSizeBytes: Long = 100 * 1024 * 1024
         
         builder.setDiskCache(
             DiskLruCacheFactory(

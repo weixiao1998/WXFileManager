@@ -195,17 +195,16 @@ class SmbViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun loadFiles(path: String) {
+    fun loadFiles(path: String, useCache: Boolean = true) {
         _loading.value = true
         _currentPath.value = path
         updateBreadcrumbs(path, _currentShare.value)
         
-        // Save last path
         prefs.edit().putString("last_path", path).apply()
         
         viewModelScope.launch {
             try {
-                val list = SmbManager.listFiles(path)
+                val list = SmbManager.listFiles(path, useCache)
                 _files.value = list
                 applyFilterAndSort()
             } catch (e: Exception) {
