@@ -30,7 +30,7 @@
             <View
                 android:id="@+id/top_mask_portrait"
                 android:layout_width="match_parent"
-                android:layout_height="80dp"
+                android:layout_height="50dp"
                 android:background="@drawable/gradient_overlay_top"
                 android:visibility="gone" />
 
@@ -110,14 +110,25 @@
                 android:background="@drawable/gradient_overlay_bottom"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingStart="12dp"
+                android:paddingStart="8dp"
                 android:paddingEnd="8dp"
                 android:visibility="gone">
+
+                <ImageButton
+                    android:id="@+id/btn_play_pause_portrait"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:padding="6dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_play_arrow"
+                    app:tint="@android:color/white" />
 
                 <TextView
                     android:id="@+id/tv_current_time_portrait"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
                     android:text="00:00"
                     android:textColor="@android:color/white"
                     android:textSize="12sp" />
@@ -125,13 +136,13 @@
                 <SeekBar
                     android:id="@+id/seekbar_portrait"
                     android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_marginStart="8dp"
-                    android:layout_marginEnd="8dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginEnd="6dp"
                     android:layout_weight="1"
                     android:max="1000"
-                    android:maxHeight="4dp"
-                    android:minHeight="4dp"
+                    android:maxHeight="3dp"
+                    android:minHeight="3dp"
                     android:progressDrawable="@drawable/seekbar_progress"
                     android:thumb="@drawable/seekbar_thumb" />
 
@@ -145,9 +156,9 @@
 
                 <ImageButton
                     android:id="@+id/btn_rotate_portrait"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:layout_marginStart="8dp"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="6dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:src="@drawable/ic_rotate"
                     app:tint="@android:color/white" />
@@ -223,7 +234,7 @@
         <View
             android:id="@+id/top_mask_landscape"
             android:layout_width="match_parent"
-            android:layout_height="100dp"
+            android:layout_height="60dp"
             android:background="@drawable/gradient_overlay_top"
             android:visibility="gone" />
 
@@ -298,52 +309,127 @@
         <LinearLayout
             android:id="@+id/bottom_controls_landscape"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="wrap_content"
             android:layout_gravity="bottom"
             android:background="@drawable/gradient_overlay_bottom"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="16dp"
-            android:paddingEnd="12dp"
+            android:orientation="vertical"
             android:visibility="gone">
 
-            <TextView
-                android:id="@+id/tv_current_time_landscape"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="00:00"
-                android:textColor="@android:color/white"
-                android:textSize="12sp" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="28dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="16dp"
+                android:paddingEnd="12dp">
 
-            <SeekBar
-                android:id="@+id/seekbar_landscape"
-                android:layout_width="0dp"
-                android:layout_height="40dp"
-                android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp"
-                android:layout_weight="1"
-                android:max="1000"
-                android:maxHeight="4dp"
-                android:minHeight="4dp"
-                android:progressDrawable="@drawable/seekbar_progress"
-                android:thumb="@drawable/seekbar_thumb" />
+                <TextView
+                    android:id="@+id/tv_current_time_landscape"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="00:00"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp" />
 
-            <TextView
-                android:id="@+id/tv_duration_landscape"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="00:00"
-                android:textColor="@android:color/white"
-                android:textSize="12sp" />
+                <SeekBar
+                    android:id="@+id/seekbar_landscape"
+                    android:layout_width="0dp"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="10dp"
+                    android:layout_marginEnd="10dp"
+                    android:layout_weight="1"
+                    android:max="1000"
+                    android:maxHeight="3dp"
+                    android:minHeight="3dp"
+                    android:progressDrawable="@drawable/seekbar_progress"
+                    android:thumb="@drawable/seekbar_thumb" />
 
-            <ImageButton
-                android:id="@+id/btn_rotate_landscape"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_marginStart="12dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_rotate"
-                app:tint="@android:color/white" />
+                <TextView
+                    android:id="@+id/tv_duration_landscape"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="00:00"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="44dp">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="center"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageButton
+                        android:id="@+id/btn_rewind_10_landscape"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="7dp"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_rewind_10"
+                        app:tint="@android:color/white" />
+
+                    <ImageButton
+                        android:id="@+id/btn_prev_landscape"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="4dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="8dp"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_skip_previous"
+                        app:tint="@android:color/white" />
+
+                    <ImageButton
+                        android:id="@+id/btn_play_pause_landscape"
+                        android:layout_width="42dp"
+                        android:layout_height="42dp"
+                        android:layout_marginStart="8dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="8dp"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_play_arrow"
+                        app:tint="@android:color/white" />
+
+                    <ImageButton
+                        android:id="@+id/btn_next_landscape"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:layout_marginEnd="4dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="8dp"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_skip_next"
+                        app:tint="@android:color/white" />
+
+                    <ImageButton
+                        android:id="@+id/btn_forward_10_landscape"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="7dp"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_forward_10"
+                        app:tint="@android:color/white" />
+                </LinearLayout>
+
+                <ImageButton
+                    android:id="@+id/btn_rotate_landscape"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:layout_gravity="center_vertical|end"
+                    android:layout_marginEnd="16dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:padding="6dp"
+                    android:src="@drawable/ic_rotate"
+                    app:tint="@android:color/white" />
+            </FrameLayout>
         </LinearLayout>
     </FrameLayout>
 

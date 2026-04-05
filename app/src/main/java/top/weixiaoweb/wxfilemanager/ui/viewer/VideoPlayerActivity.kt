@@ -176,6 +176,44 @@ class VideoPlayerActivity : AppCompatActivity() {
         
         binding.btnRotatePortrait.setOnClickListener { toggleOrientation() }
         binding.btnRotateLandscape.setOnClickListener { toggleOrientation() }
+
+        val rewind10Listener = View.OnClickListener {
+            player?.let { exoPlayer ->
+                val newPosition = (exoPlayer.currentPosition - 10_000).coerceAtLeast(0)
+                exoPlayer.seekTo(newPosition)
+            }
+        }
+        val forward10Listener = View.OnClickListener {
+            player?.let { exoPlayer ->
+                val duration = exoPlayer.duration
+                if (duration > 0) {
+                    val newPosition = (exoPlayer.currentPosition + 10_000).coerceAtMost(duration)
+                    exoPlayer.seekTo(newPosition)
+                }
+            }
+        }
+        val prevListener = View.OnClickListener {
+            if (currentPosition > 0) {
+                playVideoAt(currentPosition - 1)
+            }
+        }
+        val nextListener = View.OnClickListener {
+            if (currentPosition < videoList.size - 1) {
+                playVideoAt(currentPosition + 1)
+            }
+        }
+        val playPauseListener = View.OnClickListener { togglePlayPause() }
+
+        binding.btnRewind10Landscape.setOnClickListener(rewind10Listener)
+
+        binding.btnPrevLandscape.setOnClickListener(prevListener)
+
+        binding.btnPlayPausePortrait.setOnClickListener(playPauseListener)
+        binding.btnPlayPauseLandscape.setOnClickListener(playPauseListener)
+
+        binding.btnNextLandscape.setOnClickListener(nextListener)
+
+        binding.btnForward10Landscape.setOnClickListener(forward10Listener)
         
         binding.seekbarPortrait.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -199,6 +237,12 @@ class VideoPlayerActivity : AppCompatActivity() {
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        player?.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                updatePlayPauseButton(isPlaying)
+            }
         })
     }
     
@@ -547,6 +591,12 @@ class VideoPlayerActivity : AppCompatActivity() {
             .start()
     }
     
+    private fun updatePlayPauseButton(isPlaying: Boolean) {
+        val iconRes = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow
+        binding.btnPlayPausePortrait.setImageResource(iconRes)
+        binding.btnPlayPauseLandscape.setImageResource(iconRes)
+    }
+    
     private fun toggleControls() {
         if (controlsVisible) {
             hideControls()
@@ -558,16 +608,16 @@ class VideoPlayerActivity : AppCompatActivity() {
     private fun showControls() {
         controlsVisible = true
         handler.removeCallbacks(hideControlsRunnable)
-        
+
         if (isLandscape) {
             binding.topBarLandscape.animate().cancel()
             binding.topMaskLandscape.animate().cancel()
             binding.bottomControlsLandscape.animate().cancel()
-            
+
             binding.topBarLandscape.visibility = View.VISIBLE
             binding.topMaskLandscape.visibility = View.VISIBLE
             binding.bottomControlsLandscape.visibility = View.VISIBLE
-            
+
             binding.topBarLandscape.alpha = 1f
             binding.topMaskLandscape.alpha = 1f
             binding.bottomControlsLandscape.alpha = 1f
@@ -575,32 +625,32 @@ class VideoPlayerActivity : AppCompatActivity() {
             binding.topBarPortrait.animate().cancel()
             binding.topMaskPortrait.animate().cancel()
             binding.bottomControlsPortrait.animate().cancel()
-            
+
             binding.topBarPortrait.visibility = View.VISIBLE
             binding.topMaskPortrait.visibility = View.VISIBLE
             binding.bottomControlsPortrait.visibility = View.VISIBLE
-            
+
             binding.topBarPortrait.alpha = 1f
             binding.topMaskPortrait.alpha = 1f
             binding.bottomControlsPortrait.alpha = 1f
         }
-        
+
         handler.postDelayed(hideControlsRunnable, 5000)
     }
-    
+
     private fun showControlsForSeek() {
         controlsVisible = true
         handler.removeCallbacks(hideControlsRunnable)
-        
+
         if (isLandscape) {
             binding.topBarLandscape.animate().cancel()
             binding.topMaskLandscape.animate().cancel()
             binding.bottomControlsLandscape.animate().cancel()
-            
+
             binding.topBarLandscape.visibility = View.VISIBLE
             binding.topMaskLandscape.visibility = View.VISIBLE
             binding.bottomControlsLandscape.visibility = View.VISIBLE
-            
+
             binding.topBarLandscape.alpha = 1f
             binding.topMaskLandscape.alpha = 1f
             binding.bottomControlsLandscape.alpha = 1f
@@ -608,11 +658,11 @@ class VideoPlayerActivity : AppCompatActivity() {
             binding.topBarPortrait.animate().cancel()
             binding.topMaskPortrait.animate().cancel()
             binding.bottomControlsPortrait.animate().cancel()
-            
+
             binding.topBarPortrait.visibility = View.VISIBLE
             binding.topMaskPortrait.visibility = View.VISIBLE
             binding.bottomControlsPortrait.visibility = View.VISIBLE
-            
+
             binding.topBarPortrait.alpha = 1f
             binding.topMaskPortrait.alpha = 1f
             binding.bottomControlsPortrait.alpha = 1f
@@ -627,7 +677,7 @@ class VideoPlayerActivity : AppCompatActivity() {
     
     private fun hideControls() {
         controlsVisible = false
-        
+
         if (isLandscape) {
             binding.topBarLandscape.animate()
                 .alpha(0f)
