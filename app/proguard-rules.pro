@@ -19,3 +19,13 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# LibVLC ProGuard rules
+-keep class org.videolan.libvlc.** { *; }
+-keep class org.videolan.medialibrary.** { *; }
+-dontwarn org.videolan.**
+-keepclassmembers class * {
+    native <methods>;
+}
+-keep class androidx.media3.decoder.VideoDecoderOutputBuffer { *; }
+-keep class androidx.media3.decoder.DecoderInputBuffer { *; }

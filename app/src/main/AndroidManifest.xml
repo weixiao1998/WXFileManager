@@ -33,6 +33,11 @@
             android:name=".ui.viewer.VideoPlayerActivity"
             android:configChanges="orientation|screenSize|screenLayout|layoutDirection" />
         <activity 
+            android:name=".ui.viewer.VlcVideoPlayerActivity"
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
+            android:screenOrientation="sensor"
+            android:exported="true" />
+        <activity 
             android:name=".ui.viewer.SearchActivity"
             android:theme="@style/Theme.WXFileManager.NoActionBar" />
     </application>

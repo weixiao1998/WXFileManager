@@ -83,6 +83,23 @@ object SmbManager {
         if (isConnected()) return true
         return tryReconnectSync()
     }
+
+    fun getConnectionInfo(): ConnectionInfo? {
+        synchronized(reconnectLock) {
+            val host = lastHost ?: return null
+            val user = lastUser ?: return null
+            val pass = lastPass ?: return null
+            val share = lastShare ?: return null
+            return ConnectionInfo(host, user, pass, share)
+        }
+    }
+
+    data class ConnectionInfo(
+        val host: String,
+        val user: String,
+        val pass: String,
+        val share: String
+    )
     
     private fun tryReconnectSync(): Boolean {
         synchronized(reconnectLock) {

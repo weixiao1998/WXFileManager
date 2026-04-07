@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "top.weixiaoweb.wxfilemanager"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "top.weixiaoweb.wxfilemanager"
@@ -16,6 +16,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
     }
 
     buildFeatures {
@@ -29,6 +33,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+    }
+
+    packaging {
+        jniLibs {
+            pickFirsts += listOf("libvlc.so", "libvlcjni.so", "libc++_shared.so")
         }
     }
     compileOptions {
@@ -59,6 +69,9 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation(libs.media3.session)
+    
+    // VLC Player (for Hi10P and special formats)
+    implementation(libs.libvlc.all)
     
     // Coroutines
     implementation(libs.coroutines.android)

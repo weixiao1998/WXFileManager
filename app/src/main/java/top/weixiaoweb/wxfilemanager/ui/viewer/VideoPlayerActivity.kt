@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
@@ -26,6 +27,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.recyclerview.widget.LinearLayoutManager
 import kotlinx.coroutines.CoroutineScope
@@ -45,6 +47,10 @@ import java.util.Date
 import java.util.Locale
 
 class VideoPlayerActivity : AppCompatActivity() {
+
+    companion object {
+        private const val TAG = "VideoPlayer"
+    }
 
     private lateinit var binding: ActivityVideoPlayerBinding
     private var player: ExoPlayer? = null
@@ -125,6 +131,12 @@ class VideoPlayerActivity : AppCompatActivity() {
         currentPath = path
         isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
+        if (isHi10PVideo(currentName)) {
+            Log.d(TAG, "检测到Hi10P视频，直接跳转VLC播放器: $currentName")
+            switchToAlternativePlayer()
+            return
+        }
+
         setupPlayer()
         setupUI()
         setupTouchListener()
@@ -148,7 +160,12 @@ class VideoPlayerActivity : AppCompatActivity() {
             androidx.media3.datasource.DefaultDataSource.Factory(this)
         }
 
+        val renderersFactory = DefaultRenderersFactory(this)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            .setEnableDecoderFallback(true)
+
         player = ExoPlayer.Builder(this)
+            .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .build()
         
@@ -164,7 +181,13 @@ class VideoPlayerActivity : AppCompatActivity() {
                         }
                     }
                     updateVideoInfo()
+                } else if (playbackState == Player.STATE_IDLE) {
                 }
+            }
+            
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                super.onPlayerError(error)
+                handlePlaybackError(error)
             }
         })
     }
@@ -509,6 +532,56 @@ class VideoPlayerActivity : AppCompatActivity() {
         binding.tvVideoTitle.text = file.name
         
         loadVideo(file.path, file.name, file.isSmb)
+    }
+    
+    private fun handlePlaybackError(error: androidx.media3.common.PlaybackException) {
+        val errorMessage = error.message ?: "未知错误"
+        android.util.Log.e(TAG, "播放错误: $errorMessage (code: ${error.errorCode})")
+        
+        showVlcPlayerOption("视频播放失败: $errorMessage")
+    }
+    
+    private fun showVlcPlayerOption(reason: String) {
+        val message = "⚠️ $reason\n\n" +
+            "可能是不支持的格式（如Hi10P 10-bit视频）。\n\n" +
+            "本应用已内置VLC播放器，可以支持此格式！"
+        
+        android.app.AlertDialog.Builder(this)
+            .setTitle("🎬 视频播放失败")
+            .setMessage(message)
+            .setPositiveButton("🎯 使用内置VLC播放") { _, _ ->
+                switchToAlternativePlayer()
+            }
+            .setNegativeButton("返回") { _, _ ->
+                finish()
+            }
+            .setCancelable(false)
+            .show()
+    }
+    
+    private fun isHi10PVideo(fileName: String): Boolean {
+        val hi10pPatterns = listOf(
+            "hi10p",
+            "Hi10P",
+            "HI10P",
+            "10bit",
+            "10Bit",
+            "10BIT"
+        )
+        
+        return hi10pPatterns.any { pattern ->
+            fileName.contains(pattern, ignoreCase = true)
+        }
+    }
+    
+    private fun switchToAlternativePlayer() {
+        val intent = android.content.Intent(this, VlcVideoPlayerActivity::class.java).apply {
+            putExtra("name", currentName)
+            putExtra("path", currentPath)
+            putExtra("isSmb", isSmbFile)
+        }
+        startActivity(intent)
+        finish()
     }
     
     private fun updateVideoInfo() {
