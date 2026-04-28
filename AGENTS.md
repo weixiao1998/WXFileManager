@@ -1,105 +1,88 @@
-# WXFileManager - AI Agents 配置
+# WXFileManager - AI Agent 参考
 
-本项目是一个 Android 文件管理器应用，支持本地文件管理和 SMB 网络共享文件浏览。
+Android 文件管理器，支持本地文件浏览与 SMB 局域网共享。
 
-## 项目概述
+## 项目信息
 
 - **包名**: `top.weixiaoweb.wxfilemanager`
-- **最低 SDK**: Android 5.0 (API 21)
-- **目标 SDK**: Android 16
-- **主要功能**:
-  - 本地文件浏览与管理
-  - SMB 局域网共享文件浏览
-  - 图片查看器（支持手势缩放）
-  - 视频播放器（基于 ExoPlayer/Media3）
-  - 文件搜索功能
+- **minSdk**: 24 (Android 7.0)
+- **targetSdk**: 34 (Android 14)
+- **compileSdk**: 35
+- **语言**: Kotlin (JVM 17)
+- **构建**: Gradle + Kotlin DSL (`./gradlew`)
 
 ## 技术栈
 
-- **语言**: Kotlin
-- **UI 框架**: Android View + Material Design
-- **导航**: Navigation Component
-- **图片加载**: Glide
-- **视频播放**: Media3 ExoPlayer
-- **SMB 协议**: smbj 库
-- **异步处理**: Kotlin Coroutines
+| 模块 | 依赖 |
+|------|------|
+| UI | Android View + Material Design + ViewBinding |
+| 导航 | Navigation Component |
+| 图片加载 | Glide |
+| 视频播放 | Media3 ExoPlayer + libVLC (Hi10P/特殊格式) |
+| SMB 协议 | smbj + dcerpc |
+| 异步 | Kotlin Coroutines + Lifecycle |
+
+## AI Agent 工作原则
+
+### 1. 编码前思考
+
+**不要假设。不要隐藏困惑。呈现权衡。**
+
+- **明确说明假设** — 如果不确定，询问而不是猜测
+- **呈现多种解释** — 当存在歧义时，不要默默选择
+- **适时提出异议** — 如果存在更简单的方法，说出来
+- **困惑时停下来** — 指出不清楚的地方并要求澄清
+
+### 2. 简洁优先
+
+**用最少的代码解决问题。不要过度推测。**
+
+- 不要添加要求之外的功能
+- 不要为一次性代码创建抽象
+- 不要添加未要求的"灵活性"或"可配置性"
+- 不要为不可能发生的场景做错误处理
+- 如果 200 行代码可以写成 50 行，重写它
+
+**检验标准：** 资深工程师会觉得这过于复杂吗？如果是，简化。
 
 ## 代码规范
 
-### 命名约定
+- **类名**: PascalCase (`SmbManager`, `VideoPlayerActivity`)
+- **方法/变量**: camelCase (`openFile`, `checkAndReconnect`)
+- **常量**: UPPER_SNAKE_CASE (`CONNECTION_TIMEOUT`)
+- **资源文件**: 小写下划线分隔 (`activity_main.xml`)
 
-- **类名**: 大驼峰命名法 (PascalCase)，如 `SmbManager`, `VideoPlayerActivity`
-- **方法名**: 小驼峰命名法 (camelCase)，如 `openFile`, `checkAndReconnect`
-- **常量**: 全大写下划线分隔，如 `CONNECTION_TIMEOUT`
-- **资源文件**: 小写下划线分隔，如 `activity_main.xml`
-
-### 文件组织
+## 文件组织
 
 ```
 app/src/main/java/top/weixiaoweb/wxfilemanager/
 ├── adapter/          # RecyclerView 适配器
 ├── model/            # 数据模型
-├── ui/               # UI 层（Fragment、Activity）
+├── ui/               # Activity / Fragment
 │   ├── local/        # 本地文件模块
 │   ├── smb/          # SMB 网络共享模块
-│   └── viewer/       # 文件查看器
+│   └── viewer/       # 文件查看器（图片/视频）
 ├── utils/            # 工具类
-└── viewmodel/        # ViewModel 层
+└── viewmodel/        # ViewModel
 ```
 
 ## SMB 连接管理
 
-### 连接生命周期
+由 `SmbManager` 单例管理：
 
-SMB 连接由 `SmbManager` 单例管理，具有以下特点：
+- **线程安全**: `synchronized` 保护所有连接操作
+- **自动重连**: 断开时自动重连，最多 3 次
+- **超时检测**: 60 秒无操作后验证连接有效性
 
-1. **线程安全**: 使用 `synchronized` 锁保护所有连接操作
-2. **自动重连**: 连接断开时自动尝试重连（最多 3 次）
-3. **超时检测**: 60 秒无操作后验证连接有效性
+**关键方法**: `isConnected()`, `checkAndReconnect()`, `openFile(path)`, `disconnect()`
 
-### 关键方法
-
-- `isConnected()`: 检查连接状态
-- `checkAndReconnect()`: 检查并重连
-- `openFile(path)`: 打开 SMB 文件
-- `disconnect()`: 断开连接
-
-## 常见问题处理
-
-### SMB 连接断开
-
-当应用从后台切回前台时，SMB 连接可能已被服务器断开。处理流程：
-
-1. `VideoPlayerActivity.onResume()` 或 `SmbFragment.onResume()` 调用 `checkAndReconnect()`
-2. `SmbDataSource.openFileWithRetry()` 在打开文件前检查连接
-3. 连接无效时自动重连，最多重试 3 次
-
-### 文件打开失败
-
-如果文件打开失败，检查：
-
-1. SMB 连接是否有效
-2. 文件路径是否正确
-3. 是否有读取权限
+**后台恢复处理**: `VideoPlayerActivity.onResume()` / `SmbFragment.onResume()` → `checkAndReconnect()` → `SmbDataSource.openFileWithRetry()`
 
 ## 构建命令
 
 ```bash
-# 构建 Debug 版本
-./gradlew assembleDebug
-
-# 构建 Release 版本
-./gradlew assembleRelease
-
-# 运行单元测试
-./gradlew test
-
-# 运行 Lint 检查
-./gradlew lint
+./gradlew assembleDebug      # Debug 构建
+./gradlew assembleRelease    # Release 构建
+./gradlew test               # 单元测试
+./gradlew lint               # Lint 检查
 ```
-
-## 相关链接
-
-- [SMBJ 库文档](https://github.com/hierynomus/smbj)
-- [Media3 ExoPlayer 文档](https://developer.android.com/media/media3)
-- [Glide 文档](https://github.com/bumptech/glide)

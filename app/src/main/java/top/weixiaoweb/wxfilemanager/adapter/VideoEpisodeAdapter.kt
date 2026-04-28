@@ -47,23 +47,26 @@ class VideoEpisodeAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = getItem(position)
-        
+
+        // Cancel any pending Glide request to prevent stale thumbnails on recycled views
+        Glide.with(holder.ivThumbnail).clear(holder.ivThumbnail)
+
         holder.tvName.text = item.name
         holder.tvSize.text = formatFileSize(item.size)
-        
+
         val isPlaying = position == currentPlayingPosition
         holder.ivPlaying.visibility = if (isPlaying) View.VISIBLE else View.GONE
-        
+
         if (isPlaying) {
             holder.itemView.setBackgroundColor(0x33FFFFFF)
         } else {
             holder.itemView.setBackgroundColor(0x00000000)
         }
-        
+
         holder.itemView.setOnClickListener {
             onItemClick(item, position)
         }
-        
+
         loadThumbnailWithGlide(holder, item)
         loadDuration(holder, item)
     }

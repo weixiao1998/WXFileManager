@@ -64,15 +64,6 @@
                     android:textSize="16sp" />
             </LinearLayout>
 
-            <ImageView
-                android:id="@+id/iv_play_state_portrait"
-                android:layout_width="60dp"
-                android:layout_height="60dp"
-                android:layout_gravity="center"
-                android:alpha="0"
-                android:src="@android:drawable/ic_media_play"
-                android:tint="@android:color/white" />
-
             <TextView
                 android:id="@+id/tv_seek_hint_portrait"
                 android:layout_width="wrap_content"
@@ -267,15 +258,6 @@
                 android:textColor="@android:color/white"
                 android:textSize="18sp" />
         </LinearLayout>
-
-        <ImageView
-            android:id="@+id/iv_play_state_landscape"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:layout_gravity="center"
-            android:alpha="0"
-            android:src="@android:drawable/ic_media_play"
-            android:tint="@android:color/white" />
 
         <TextView
             android:id="@+id/tv_seek_hint_landscape"

@@ -131,8 +131,8 @@ class VideoPlayerActivity : AppCompatActivity() {
         currentPath = path
         isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-        if (isHi10PVideo(currentName)) {
-            Log.d(TAG, "检测到Hi10P视频，直接跳转VLC播放器: $currentName")
+        if (isHi10PVideo(currentName) || isVlcPreferredVideo(currentName)) {
+            Log.d(TAG, "检测到Hi10P/VLC优先视频，直接跳转VLC播放器: $currentName")
             switchToAlternativePlayer()
             return
         }
@@ -216,13 +216,15 @@ class VideoPlayerActivity : AppCompatActivity() {
             }
         }
         val prevListener = View.OnClickListener {
-            if (currentPosition > 0) {
-                playVideoAt(currentPosition - 1)
+            if (videoList.isNotEmpty()) {
+                val newPosition = if (currentPosition > 0) currentPosition - 1 else videoList.size - 1
+                playVideoAt(newPosition)
             }
         }
         val nextListener = View.OnClickListener {
-            if (currentPosition < videoList.size - 1) {
-                playVideoAt(currentPosition + 1)
+            if (videoList.isNotEmpty()) {
+                val newPosition = if (currentPosition < videoList.size - 1) currentPosition + 1 else 0
+                playVideoAt(newPosition)
             }
         }
         val playPauseListener = View.OnClickListener { togglePlayPause() }
@@ -505,9 +507,13 @@ class VideoPlayerActivity : AppCompatActivity() {
                 currentPosition = videoList.indexOfFirst { it.path == currentPath }
                 
                 withContext(Dispatchers.Main) {
-                    episodeAdapter.submitList(videoList)
                     if (currentPosition >= 0) {
                         episodeAdapter.setCurrentPlaying(currentPosition)
+                    }
+                    episodeAdapter.submitList(videoList) {
+                        if (currentPosition >= 0) {
+                            binding.rvEpisodes.scrollToPosition(currentPosition)
+                        }
                     }
                     binding.tvEpisodeTitle.text = "选集 (共${videoList.size}个)"
                 }
@@ -568,10 +574,16 @@ class VideoPlayerActivity : AppCompatActivity() {
             "10Bit",
             "10BIT"
         )
-        
+
         return hi10pPatterns.any { pattern ->
             fileName.contains(pattern, ignoreCase = true)
         }
+    }
+
+    private fun isVlcPreferredVideo(fileName: String): Boolean {
+        val vlcPreferredExtensions = listOf("rmvb", "rm")
+        val extension = fileName.substringAfterLast('.', "").lowercase()
+        return vlcPreferredExtensions.contains(extension)
     }
     
     private fun switchToAlternativePlayer() {
@@ -634,34 +646,10 @@ class VideoPlayerActivity : AppCompatActivity() {
         player?.let {
             if (it.isPlaying) {
                 it.pause()
-                showPlayStateIcon(false)
             } else {
                 it.play()
-                showPlayStateIcon(true)
             }
         }
-    }
-    
-    private fun showPlayStateIcon(isPlaying: Boolean) {
-        val icon = if (isPlaying) {
-            android.R.drawable.ic_media_play
-        } else {
-            android.R.drawable.ic_media_pause
-        }
-        
-        val playStateView = if (isLandscape) {
-            binding.ivPlayStateLandscape
-        } else {
-            binding.ivPlayStatePortrait
-        }
-        
-        playStateView.setImageResource(icon)
-        playStateView.alpha = 1f
-        playStateView.animate()
-            .alpha(0f)
-            .setDuration(500)
-            .setStartDelay(300)
-            .start()
     }
     
     private fun updatePlayPauseButton(isPlaying: Boolean) {

@@ -42,7 +42,10 @@ class FileAdapter(private val onItemClick: (FileModel) -> Unit) :
 
         fun bind(file: FileModel) {
             binding.fileName.text = file.name
-            
+
+            // Cancel any pending Glide request to prevent stale thumbnails on recycled views
+            Glide.with(binding.fileIcon).clear(binding.fileIcon)
+
             // Adjust sizes based on view mode
             val iconSize = when (currentViewMode) {
                 FileModel.ViewMode.LIST_SMALL, FileModel.ViewMode.GRID_SMALL -> 32

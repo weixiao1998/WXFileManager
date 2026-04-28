@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+.idea/deploymentTargetSelector.xml
+.trae/rules/git-commit-message.md
