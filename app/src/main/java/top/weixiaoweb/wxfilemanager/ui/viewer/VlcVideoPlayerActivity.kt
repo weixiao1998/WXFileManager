@@ -477,9 +477,10 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     }
     
     private fun updatePlayPauseButton(isPlaying: Boolean) {
-        val iconRes = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow
-        binding.btnPlayPausePortrait.setImageResource(iconRes)
-        binding.btnPlayPauseLandscape.setImageResource(iconRes)
+        val portraitIconRes = if (isPlaying) R.drawable.ic_pause_portrait else R.drawable.ic_play_portrait
+        val landscapeIconRes = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+        binding.btnPlayPausePortrait.setImageResource(portraitIconRes)
+        binding.btnPlayPauseLandscape.setImageResource(landscapeIconRes)
     }
     
     private fun seekRelative(offsetMs: Long) {

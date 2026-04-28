@@ -61,6 +61,8 @@ class VideoPlayerActivity : AppCompatActivity() {
     private var isLandscape = false
     private var controlsVisible = false
     private var isFastForwarding = false
+    private var isControlsLocked = false
+    private var repeatMode = Player.REPEAT_MODE_OFF
     
     private lateinit var gestureDetector: GestureDetector
     private val longPressHandler = Handler(Looper.getMainLooper())
@@ -194,9 +196,11 @@ class VideoPlayerActivity : AppCompatActivity() {
     
     @SuppressLint("ClickableViewAccessibility")
     private fun setupUI() {
+        binding.btnRepeatLandscape.setImageResource(R.drawable.ic_repeat_list)
+        
         binding.btnBackPortrait.setOnClickListener { finish() }
         binding.btnBackLandscape.setOnClickListener { finish() }
-        
+
         binding.btnRotatePortrait.setOnClickListener { toggleOrientation() }
         binding.btnRotateLandscape.setOnClickListener { toggleOrientation() }
 
@@ -230,16 +234,67 @@ class VideoPlayerActivity : AppCompatActivity() {
         val playPauseListener = View.OnClickListener { togglePlayPause() }
 
         binding.btnRewind10Landscape.setOnClickListener(rewind10Listener)
-
         binding.btnPrevLandscape.setOnClickListener(prevListener)
-
         binding.btnPlayPausePortrait.setOnClickListener(playPauseListener)
         binding.btnPlayPauseLandscape.setOnClickListener(playPauseListener)
-
         binding.btnNextLandscape.setOnClickListener(nextListener)
-
         binding.btnForward10Landscape.setOnClickListener(forward10Listener)
-        
+
+        binding.btnRepeatLandscape.setOnClickListener {
+            repeatMode = (repeatMode + 1) % 3
+            player?.repeatMode = repeatMode
+            when (repeatMode) {
+                Player.REPEAT_MODE_OFF -> {
+                    binding.btnRepeatLandscape.setImageResource(R.drawable.ic_repeat_list)
+                    Toast.makeText(this, "列表播放", Toast.LENGTH_SHORT).show()
+                }
+                Player.REPEAT_MODE_ONE -> {
+                    binding.btnRepeatLandscape.setImageResource(R.drawable.ic_repeat_one)
+                    Toast.makeText(this, "单曲循环", Toast.LENGTH_SHORT).show()
+                }
+                Player.REPEAT_MODE_ALL -> {
+                    binding.btnRepeatLandscape.setImageResource(R.drawable.ic_repeat_random)
+                    Toast.makeText(this, "随机播放", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        binding.btnSpeedLandscape.setOnClickListener {
+            showSpeedSelectionDialog()
+        }
+
+        binding.btnPlaylistLandscape.setOnClickListener {
+            togglePortraitContainer()
+        }
+
+        binding.btnScreenshotLandscape.setOnClickListener {
+            takeScreenshot()
+        }
+
+        binding.btnLockLandscape.setOnClickListener {
+            isControlsLocked = !isControlsLocked
+            if (isControlsLocked) {
+                hideControls()
+                binding.btnLockLandscape.visibility = View.VISIBLE
+                Toast.makeText(this, "已锁定", Toast.LENGTH_SHORT).show()
+            } else {
+                showControls()
+                Toast.makeText(this, "已解锁", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        binding.btnSubtitleLandscape.setOnClickListener {
+            showSubtitleSelectionDialog()
+        }
+
+        binding.btnAudioTrackLandscape.setOnClickListener {
+            showAudioTrackSelectionDialog()
+        }
+
+        binding.btnMenuLandscape.setOnClickListener {
+            showMenuDialog()
+        }
+
         binding.seekbarPortrait.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -251,7 +306,7 @@ class VideoPlayerActivity : AppCompatActivity() {
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
-        
+
         binding.seekbarLandscape.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -269,6 +324,47 @@ class VideoPlayerActivity : AppCompatActivity() {
                 updatePlayPauseButton(isPlaying)
             }
         })
+    }
+
+    private fun showSpeedSelectionDialog() {
+        val speeds = arrayOf("0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x")
+        val speedValues = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+        android.app.AlertDialog.Builder(this)
+            .setTitle("播放速度")
+            .setItems(speeds) { _, which ->
+                val speed = speedValues[which]
+                player?.playbackParameters = PlaybackParameters(speed)
+                Toast.makeText(this, "${speeds[which]}", Toast.LENGTH_SHORT).show()
+            }
+            .show()
+    }
+
+    private fun togglePortraitContainer() {
+        if (binding.portraitContainer.visibility == View.VISIBLE) {
+            binding.portraitContainer.visibility = View.GONE
+            binding.landscapeContainer.visibility = View.VISIBLE
+        } else {
+            binding.portraitContainer.visibility = View.VISIBLE
+            binding.landscapeContainer.visibility = View.GONE
+            binding.playerViewLandscape.player = null
+            binding.playerViewPortrait.player = player
+        }
+    }
+
+    private fun takeScreenshot() {
+        Toast.makeText(this, "截图功能开发中", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showSubtitleSelectionDialog() {
+        Toast.makeText(this, "字幕选择功能开发中", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showAudioTrackSelectionDialog() {
+        Toast.makeText(this, "音轨选择功能开发中", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showMenuDialog() {
+        Toast.makeText(this, "菜单功能开发中", Toast.LENGTH_SHORT).show()
     }
     
     @SuppressLint("ClickableViewAccessibility")
@@ -653,20 +749,26 @@ class VideoPlayerActivity : AppCompatActivity() {
     }
     
     private fun updatePlayPauseButton(isPlaying: Boolean) {
-        val iconRes = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow
-        binding.btnPlayPausePortrait.setImageResource(iconRes)
-        binding.btnPlayPauseLandscape.setImageResource(iconRes)
+        val portraitIcon = if (isPlaying) R.drawable.ic_pause_portrait else R.drawable.ic_play_portrait
+        val landscapeIcon = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+        binding.btnPlayPausePortrait.setImageResource(portraitIcon)
+        binding.btnPlayPauseLandscape.setImageResource(landscapeIcon)
     }
     
     private fun toggleControls() {
+        if (isControlsLocked) {
+            binding.btnLockLandscape.visibility = View.VISIBLE
+            return
+        }
         if (controlsVisible) {
             hideControls()
         } else {
             showControls()
         }
     }
-    
+
     private fun showControls() {
+        if (isControlsLocked) return
         controlsVisible = true
         handler.removeCallbacks(hideControlsRunnable)
 
@@ -674,14 +776,20 @@ class VideoPlayerActivity : AppCompatActivity() {
             binding.topBarLandscape.animate().cancel()
             binding.topMaskLandscape.animate().cancel()
             binding.bottomControlsLandscape.animate().cancel()
+            binding.btnScreenshotLandscape.animate().cancel()
+            binding.btnLockLandscape.animate().cancel()
 
             binding.topBarLandscape.visibility = View.VISIBLE
             binding.topMaskLandscape.visibility = View.VISIBLE
             binding.bottomControlsLandscape.visibility = View.VISIBLE
+            binding.btnScreenshotLandscape.visibility = View.VISIBLE
+            binding.btnLockLandscape.visibility = View.VISIBLE
 
             binding.topBarLandscape.alpha = 1f
             binding.topMaskLandscape.alpha = 1f
             binding.bottomControlsLandscape.alpha = 1f
+            binding.btnScreenshotLandscape.alpha = 1f
+            binding.btnLockLandscape.alpha = 1f
         } else {
             binding.topBarPortrait.animate().cancel()
             binding.topMaskPortrait.animate().cancel()
@@ -700,6 +808,7 @@ class VideoPlayerActivity : AppCompatActivity() {
     }
 
     private fun showControlsForSeek() {
+        if (isControlsLocked) return
         controlsVisible = true
         handler.removeCallbacks(hideControlsRunnable)
 
@@ -707,14 +816,20 @@ class VideoPlayerActivity : AppCompatActivity() {
             binding.topBarLandscape.animate().cancel()
             binding.topMaskLandscape.animate().cancel()
             binding.bottomControlsLandscape.animate().cancel()
+            binding.btnScreenshotLandscape.animate().cancel()
+            binding.btnLockLandscape.animate().cancel()
 
             binding.topBarLandscape.visibility = View.VISIBLE
             binding.topMaskLandscape.visibility = View.VISIBLE
             binding.bottomControlsLandscape.visibility = View.VISIBLE
+            binding.btnScreenshotLandscape.visibility = View.VISIBLE
+            binding.btnLockLandscape.visibility = View.VISIBLE
 
             binding.topBarLandscape.alpha = 1f
             binding.topMaskLandscape.alpha = 1f
             binding.bottomControlsLandscape.alpha = 1f
+            binding.btnScreenshotLandscape.alpha = 1f
+            binding.btnLockLandscape.alpha = 1f
         } else {
             binding.topBarPortrait.animate().cancel()
             binding.topMaskPortrait.animate().cancel()
@@ -729,13 +844,14 @@ class VideoPlayerActivity : AppCompatActivity() {
             binding.bottomControlsPortrait.alpha = 1f
         }
     }
-    
+
     private fun scheduleHideControls() {
+        if (isControlsLocked) return
         handler.postDelayed(hideControlsRunnable, 3000)
     }
-    
+
     private val hideControlsRunnable = Runnable { hideControls() }
-    
+
     private fun hideControls() {
         controlsVisible = false
 
@@ -773,6 +889,30 @@ class VideoPlayerActivity : AppCompatActivity() {
                     }
                 })
                 .start()
+            binding.btnScreenshotLandscape.animate()
+                .alpha(0f)
+                .setDuration(200)
+                .setListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        if (!controlsVisible) {
+                            binding.btnScreenshotLandscape.visibility = View.GONE
+                        }
+                    }
+                })
+                .start()
+            if (!isControlsLocked) {
+                binding.btnLockLandscape.animate()
+                    .alpha(0f)
+                    .setDuration(200)
+                    .setListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            if (!controlsVisible) {
+                                binding.btnLockLandscape.visibility = View.GONE
+                            }
+                        }
+                    })
+                    .start()
+            }
         } else {
             binding.topBarPortrait.animate()
                 .alpha(0f)

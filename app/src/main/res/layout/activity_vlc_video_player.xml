@@ -69,7 +69,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:padding="6dp"
             android:scaleType="fitCenter"
-            android:src="@drawable/ic_play_arrow"
+            android:src="@drawable/ic_play_portrait"
             app:tint="@android:color/white" />
 
         <TextView
@@ -303,7 +303,7 @@
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:padding="8dp"
                         android:scaleType="fitCenter"
-                        android:src="@drawable/ic_play_arrow"
+                        android:src="@drawable/ic_play"
                         app:tint="@android:color/white" />
 
                     <ImageButton
