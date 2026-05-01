@@ -444,7 +444,7 @@ class SmbFragment : Fragment() {
             }
             startActivity(intent)
         } else if (file.isVideo) {
-            val intent = android.content.Intent(requireContext(), top.weixiaoweb.wxfilemanager.ui.viewer.VideoPlayerActivity::class.java).apply {
+            val intent = android.content.Intent(requireContext(), top.weixiaoweb.wxfilemanager.ui.viewer.VlcVideoPlayerActivity::class.java).apply {
                 putExtra("name", file.name)
                 putExtra("path", file.path)
                 putExtra("isSmb", true)

@@ -31,8 +31,6 @@ import top.weixiaoweb.wxfilemanager.model.FileModel
 import top.weixiaoweb.wxfilemanager.utils.SafManager
 import top.weixiaoweb.wxfilemanager.utils.SmbManager
 import java.io.File as JFile
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 
 class VlcVideoPlayerActivity : AppCompatActivity() {
@@ -375,8 +373,6 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         
         binding.seekbarPortrait.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
-                // 如果是手动拖动 SeekBar，才设置播放位置
-                // 如果是代码更新（updateSeekHint），不设置播放位置，防止重复调用
                 if (fromUser && mediaPlayer != null && !isUpdatingSeekBar) {
                     val duration = mediaPlayer?.length ?: 0L
                     if (duration > 0) {
@@ -386,11 +382,11 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                 }
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {
-                // 开始拖动时保持控制层显示
+                isSeeking = true
                 showControlsForSeek()
             }
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {
-                // 停止拖动后恢复 5 秒倒计时
+                isSeeking = false
                 scheduleHideControls()
             }
         })
@@ -406,9 +402,11 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                 }
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {
+                isSeeking = true
                 showControlsForSeek()
             }
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {
+                isSeeking = false
                 scheduleHideControls()
             }
         })
@@ -700,6 +698,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     }
     
     private fun updateProgress() {
+        if (isSeeking) return
         val player = mediaPlayer ?: return
         val position = player.time
         val duration = player.length
@@ -725,9 +724,15 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     }
     
     private fun formatTime(ms: Long): String {
-        val sdf = SimpleDateFormat("mm:ss", Locale.getDefault())
-        sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
-        return sdf.format(Date(ms))
+        val totalSeconds = ms / 1000
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        return if (hours > 0) {
+            String.format(Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+        }
     }
     
     private fun toggleControls() {
@@ -920,6 +925,9 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         super.onConfigurationChanged(newConfig)
         isLandscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
         updateContainerVisibility()
+        if (!isLandscape) {
+            applyPortraitLayout()
+        }
     }
     
     private fun showProgressBar() {

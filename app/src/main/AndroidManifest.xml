@@ -30,9 +30,6 @@
             android:name=".ui.viewer.ImageViewerActivity"
             android:configChanges="orientation|screenSize|screenLayout|layoutDirection" />
         <activity 
-            android:name=".ui.viewer.VideoPlayerActivity"
-            android:configChanges="orientation|screenSize|screenLayout|layoutDirection" />
-        <activity 
             android:name=".ui.viewer.VlcVideoPlayerActivity"
             android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
             android:screenOrientation="sensor"

@@ -66,11 +66,6 @@ dependencies {
     implementation(libs.glide)
     
     // Video Playback
-    implementation(libs.media3.exoplayer)
-    implementation(libs.media3.ui)
-    implementation(libs.media3.session)
-    
-    // VLC Player (for Hi10P and special formats)
     implementation(libs.libvlc.all)
     
     // Coroutines

@@ -18,39 +18,27 @@ Android 文件管理器，支持本地文件浏览与 SMB 局域网共享。
 | UI | Android View + Material Design + ViewBinding |
 | 导航 | Navigation Component |
 | 图片加载 | Glide |
-| 视频播放 | Media3 ExoPlayer + libVLC (Hi10P/特殊格式) |
+| 视频播放 | libVLC |
 | SMB 协议 | smbj + dcerpc |
 | 异步 | Kotlin Coroutines + Lifecycle |
 
 ## AI Agent 工作原则
 
-### 1. 编码前思考
-
 **不要假设。不要隐藏困惑。呈现权衡。**
 
-- **明确说明假设** — 如果不确定，询问而不是猜测
-- **呈现多种解释** — 当存在歧义时，不要默默选择
-- **适时提出异议** — 如果存在更简单的方法，说出来
-- **困惑时停下来** — 指出不清楚的地方并要求澄清
+- 明确说明假设 — 不确定时询问
+- 呈现多种解释 — 存在歧义时列出选项
+- 适时提出异议 — 有更简单的方法时说出来
+- 困惑时停下来 — 指出不清楚的地方
 
-### 2. 简洁优先
-
-**用最少的代码解决问题。不要过度推测。**
-
-- 不要添加要求之外的功能
-- 不要为一次性代码创建抽象
-- 不要添加未要求的"灵活性"或"可配置性"
-- 不要为不可能发生的场景做错误处理
-- 如果 200 行代码可以写成 50 行，重写它
-
-**检验标准：** 资深工程师会觉得这过于复杂吗？如果是，简化。
+**简洁优先。** 用最少的代码解决问题。不要过度推测。
 
 ## 代码规范
 
-- **类名**: PascalCase (`SmbManager`, `VideoPlayerActivity`)
-- **方法/变量**: camelCase (`openFile`, `checkAndReconnect`)
-- **常量**: UPPER_SNAKE_CASE (`CONNECTION_TIMEOUT`)
-- **资源文件**: 小写下划线分隔 (`activity_main.xml`)
+- **类名**: PascalCase
+- **方法/变量**: camelCase
+- **常量**: UPPER_SNAKE_CASE
+- **资源文件**: 小写下划线分隔
 
 ## 文件组织
 
@@ -66,17 +54,9 @@ app/src/main/java/top/weixiaoweb/wxfilemanager/
 └── viewmodel/        # ViewModel
 ```
 
-## SMB 连接管理
+## 模块索引
 
-由 `SmbManager` 单例管理：
-
-- **线程安全**: `synchronized` 保护所有连接操作
-- **自动重连**: 断开时自动重连，最多 3 次
-- **超时检测**: 60 秒无操作后验证连接有效性
-
-**关键方法**: `isConnected()`, `checkAndReconnect()`, `openFile(path)`, `disconnect()`
-
-**后台恢复处理**: `VideoPlayerActivity.onResume()` / `SmbFragment.onResume()` → `checkAndReconnect()` → `SmbDataSource.openFileWithRetry()`
+- **SMB 连接管理**: 详见 [docs/SMB_CONNECTION.md](docs/SMB_CONNECTION.md)
 
 ## 构建命令
 

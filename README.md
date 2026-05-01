@@ -7,7 +7,7 @@
 - **本地文件管理** - 浏览、管理和操作设备上的文件
 - **SMB 网络共享** - 访问局域网内的 SMB 共享文件夹
 - **图片查看器** - 支持手势缩放的图片预览功能
-- **视频播放器** - 基于 ExoPlayer/Media3 的视频播放
+- **视频播放器** - 基于 libVLC 的视频播放，支持 Hi10P、RMVB 等特殊格式
 - **文件搜索** - 快速查找所需文件
 
 ## 🛠️ 技术栈
@@ -15,12 +15,12 @@
 | 组件 | 技术 |
 |------|------|
 | **开发语言** | Kotlin |
-| **最低 SDK** | Android 5.0 (API 21) |
-| **目标 SDK** | Android 16 |
+| **最低 SDK** | Android 7.0 (API 24) |
+| **目标 SDK** | Android 14 (API 34) |
 | **UI 框架** | Android View + Material Design |
 | **导航** | Navigation Component |
 | **图片加载** | Glide |
-| **视频播放** | Media3 ExoPlayer |
+| **视频播放** | libVLC |
 | **SMB 协议** | smbj |
 | **异步处理** | Kotlin Coroutines |
 
@@ -43,8 +43,8 @@ app/src/main/java/top/weixiaoweb/wxfilemanager/
 ### 环境要求
 
 - Android Studio Arctic Fox 或更高版本
-- JDK 11 或更高版本
-- Android SDK API 21+
+- JDK 17 或更高版本
+- Android SDK API 24+
 
 ### 构建项目
 
@@ -58,20 +58,9 @@ cd WXFileManager
 
 # 构建 Release 版本
 ./gradlew assembleRelease
-
-# 运行单元测试
-./gradlew test
-
-# 运行 Lint 检查
-./gradlew lint
 ```
 
-### 安装应用
-
-构建完成后，Debug APK 文件位于：
-```
-app/build/outputs/apk/debug/app-debug.apk
-```
+构建完成后，APK 文件位于 `app/build/outputs/apk/debug/app-debug.apk`
 
 ## 📖 使用说明
 
@@ -96,85 +85,28 @@ app/build/outputs/apk/debug/app-debug.apk
 
 ### 视频播放器
 
-- 基于 Media3 ExoPlayer
-- 支持常见的视频格式
+- 基于 libVLC，兼容性强
+- 支持 Hi10P、RMVB、MKV 等常见及特殊格式
 - 自动检测 SMB 连接状态并自动重连
-
-## 🔧 配置说明
-
-### SMB 连接管理
-
-SMB 连接由 `SmbManager` 单例管理，具有以下特性：
-
-- **线程安全** - 使用 synchronized 锁保护所有连接操作
-- **自动重连** - 连接断开时自动尝试重连（最多 3 次）
-- **超时检测** - 60 秒无操作后验证连接有效性
-
-### 权限配置
-
-在 `AndroidManifest.xml` 中已配置以下权限：
-
-```xml
-<!-- 存储权限 -->
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-
-<!-- 网络权限 -->
-<uses-permission android:name="android.permission.INTERNET" />
-<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-```
 
 ## 🐛 常见问题
 
 ### SMB 连接断开
 
-**问题**：应用从后台切回前台时，SMB 连接可能已断开
-
-**解决方案**：
-1. 应用会自动检测连接状态
-2. `VideoPlayerActivity.onResume()` 会调用 `checkAndReconnect()`
-3. 连接无效时自动重连，最多重试 3 次
-
-### 文件打开失败
-
-**可能原因**：
-1. SMB 连接已断开
-2. 文件路径不正确
-3. 没有读取权限
-
-**解决方案**：
-1. 检查网络连接
-2. 验证文件路径
-3. 确保已授予存储权限
+应用从后台切回前台时，SMB 连接可能已断开。应用会自动检测连接状态并尝试重连（最多 3 次）。
 
 ### 视频无法播放
 
-**可能原因**：
-1. 视频格式不支持
-2. 网络速度过慢
-3. SMB 连接断开
-
-**解决方案**：
-1. 检查视频格式（支持 MP4、MKV、AVI 等常见格式）
+1. 检查视频格式（VLC 支持绝大多数视频格式）
 2. 确保网络连接稳定
 3. 重新连接 SMB 服务器
-
-## 📄 代码规范
-
-### 命名约定
-
-- **类名**: 大驼峰命名法 (PascalCase)，如 `SmbManager`, `VideoPlayerActivity`
-- **方法名**: 小驼峰命名法 (camelCase)，如 `openFile`, `checkAndReconnect`
-- **常量**: 全大写下划线分隔，如 `CONNECTION_TIMEOUT`
-- **资源文件**: 小写下划线分隔，如 `activity_main.xml`
 
 ## 🔗 相关资源
 
 - [SMBJ 库文档](https://github.com/hierynomus/smbj)
-- [Media3 ExoPlayer 文档](https://developer.android.com/media/media3)
+- [libVLC 文档](https://wiki.videolan.org/LibVLC/)
 - [Glide 文档](https://github.com/bumptech/glide)
 - [Kotlin 协程文档](https://kotlinlang.org/docs/coroutines-overview.html)
-- [Material Design 指南](https://material.io/design)
 
 ## 📝 开发计划
 
@@ -183,7 +115,6 @@ SMB 连接由 `SmbManager` 单例管理，具有以下特性：
 - [ ] 支持云存储服务（Google Drive、OneDrive）
 - [ ] 优化大文件夹加载性能
 - [ ] 添加深色主题支持
-
 
 ## 👨‍💻 贡献
 
