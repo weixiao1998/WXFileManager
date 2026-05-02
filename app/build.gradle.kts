@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "top.weixiaoweb.wxfilemanager"
+    namespace = "dev.weixiao.wxfilemanager"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "top.weixiaoweb.wxfilemanager"
+        applicationId = "dev.weixiao.wxfilemanager"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

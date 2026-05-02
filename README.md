@@ -27,7 +27,7 @@
 ## 📦 项目结构
 
 ```
-app/src/main/java/top/weixiaoweb/wxfilemanager/
+app/src/main/java/dev/weixiao/wxfilemanager/
 ├── adapter/          # RecyclerView 适配器
 ├── model/            # 数据模型
 ├── ui/               # UI 层（Fragment、Activity）

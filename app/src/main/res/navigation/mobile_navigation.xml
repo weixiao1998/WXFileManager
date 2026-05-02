@@ -7,13 +7,13 @@
 
     <fragment
         android:id="@+id/navigation_local"
-        android:name="top.weixiaoweb.wxfilemanager.ui.local.LocalFragment"
+        android:name="dev.weixiao.wxfilemanager.ui.local.LocalFragment"
         android:label="本地文件"
         tools:layout="@layout/fragment_file_list" />
 
     <fragment
         android:id="@+id/navigation_smb"
-        android:name="top.weixiaoweb.wxfilemanager.ui.smb.SmbFragment"
+        android:name="dev.weixiao.wxfilemanager.ui.smb.SmbFragment"
         android:label="局域网 SMB"
         tools:layout="@layout/fragment_file_list" />
 </navigation>

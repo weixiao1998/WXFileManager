@@ -4,7 +4,7 @@ Android 文件管理器，支持本地文件浏览与 SMB 局域网共享。
 
 ## 项目信息
 
-- **包名**: `top.weixiaoweb.wxfilemanager`
+- **包名**: `dev.weixiao.wxfilemanager`
 - **minSdk**: 24 (Android 7.0)
 - **targetSdk**: 34 (Android 14)
 - **compileSdk**: 35
@@ -43,7 +43,7 @@ Android 文件管理器，支持本地文件浏览与 SMB 局域网共享。
 ## 文件组织
 
 ```
-app/src/main/java/top/weixiaoweb/wxfilemanager/
+app/src/main/java/dev/weixiao/wxfilemanager/
 ├── adapter/          # RecyclerView 适配器
 ├── model/            # 数据模型
 ├── ui/               # Activity / Fragment
