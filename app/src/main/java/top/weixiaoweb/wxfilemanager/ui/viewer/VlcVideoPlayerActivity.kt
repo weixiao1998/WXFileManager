@@ -57,7 +57,10 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     private var isSeeking: Boolean = false
     private var isFastForwarding: Boolean = false
     private var shouldIgnoreTap: Boolean = false  // 标记是否应该忽略点击事件
-    private var isUpdatingSeekBar: Boolean = false  // 标记是否正在更新 SeekBar
+    private var isUpdatingSeekBar: Boolean = false
+    private var isFirstResume = true
+    private var restorePosition: Long = -1L
+    private var restorePlaying: Boolean = false
 
     private val hideControlsRunnable = Runnable { hideControls() }
 
@@ -141,6 +144,17 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                             Log.d(TAG, "开始播放")
                             hideProgressBar()
                             updatePlayPauseButton(true)
+                            if (restorePosition >= 0) {
+                                val pos = restorePosition
+                                val doPause = !restorePlaying
+                                restorePosition = -1L
+                                mediaPlayer?.setTime(pos)
+                                if (doPause) {
+                                    handler.postDelayed({
+                                        mediaPlayer?.pause()
+                                    }, 150)
+                                }
+                            }
                             startProgressUpdate()
                         }
                         MediaPlayer.Event.Paused -> {
@@ -940,6 +954,17 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     
     override fun onResume() {
         super.onResume()
+        if (isFirstResume) {
+            isFirstResume = false
+        } else {
+            restorePosition = mediaPlayer?.time ?: 0L
+            restorePlaying = mediaPlayer?.isPlaying ?: false
+            mediaPlayer?.stop()
+            mediaPlayer?.attachViews(binding.vlcSurfaceView, null, false, false)
+            if (currentPath.isNotEmpty()) {
+                loadVideo(currentPath)
+            }
+        }
         if (isSmbFile) {
             CoroutineScope(Dispatchers.IO).launch {
                 SmbManager.checkAndReconnect()
