@@ -1,7 +1,8 @@
-﻿package dev.weixiao.wxfilemanager.ui.viewer
+package dev.weixiao.wxfilemanager.ui.viewer
 
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -56,11 +57,20 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     private var seekStartMs: Long = 0
     private var isSeeking: Boolean = false
     private var isFastForwarding: Boolean = false
-    private var shouldIgnoreTap: Boolean = false  // 标记是否应该忽略点击事件
+    private var shouldIgnoreTap: Boolean = false
     private var isUpdatingSeekBar: Boolean = false
     private var isFirstResume = true
     private var restorePosition: Long = -1L
     private var restorePlaying: Boolean = false
+
+    private var isAdjustingVolume = false
+    private var isAdjustingBrightness = false
+    private var initialVolume: Int = 0
+    private var maxVolume: Int = 0
+    private var initialBrightness: Float = 0f
+    private lateinit var audioManager: AudioManager
+
+    private val hideGestureHintRunnable = Runnable { hideGestureHint() }
 
     private val hideControlsRunnable = Runnable { hideControls() }
 
@@ -101,6 +111,11 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
 
         currentPath = path
         isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+        audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
+        maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        initialVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        initialBrightness = window.attributes.screenBrightness.let { if (it < 0f) 0.5f else it }
 
         setupUI()
 
@@ -446,10 +461,9 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     private fun setupGestureDetector() {
         gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                // 如果发生了滑动或长按，忽略点击事件
                 if (shouldIgnoreTap) {
                     shouldIgnoreTap = false
-                    return true  // 消费事件，但不执行操作
+                    return true
                 }
                 toggleControls()
                 return true
@@ -465,35 +479,30 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
             }
         })
         
-        // 为竖屏和横屏设置触摸监听器
-        val touchListener = View.OnTouchListener { _, event ->
-            // 先让 GestureDetector 处理手势
+        val touchListener = View.OnTouchListener { view, event ->
             val gestureHandled = gestureDetector.onTouchEvent(event)
             
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    touchStartX = event.x
-                    touchStartY = event.y
+                    touchStartX = event.rawX
+                    touchStartY = event.rawY
                     seekStartMs = mediaPlayer?.time ?: 0
                     isSeeking = false
-                    // 如果正在播放，设置长按检测（500ms 后触发快进）
+                    isAdjustingVolume = false
+                    isAdjustingBrightness = false
                     if (mediaPlayer?.isPlaying == true) {
                         longPressHandler.postDelayed(longPressRunnable, 500)
                     }
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    val deltaX = event.x - touchStartX
-                    val deltaY = event.y - touchStartY
+                    val deltaX = event.rawX - touchStartX
+                    val deltaY = event.rawY - touchStartY
                     
-                    // 检测水平滑动（滑动距离大于 50px 且水平距离大于垂直距离的 2 倍）
-                    if (kotlin.math.abs(deltaX) > 50 && kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY) * 2) {
+                    if (kotlin.math.abs(deltaX) > 50 && kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY) * 2 && !isAdjustingVolume && !isAdjustingBrightness) {
                         if (!isSeeking) {
                             isSeeking = true
-                            // 检测到滑动，取消长按
                             longPressHandler.removeCallbacks(longPressRunnable)
-                            // 标记为应该忽略后续的点击事件
                             shouldIgnoreTap = true
-                            // 滑动时保持控制层显示
                             showControlsForSeek()
                         }
                         
@@ -503,18 +512,38 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                             val viewWidth = if (isLandscape) binding.landscapeContainer.width else binding.vlcSurfaceView.width
                             val seekDelta = (deltaX / viewWidth * seekRange).toLong()
                             val newPosition = (seekStartMs + seekDelta).coerceIn(0, duration)
-                            
-                            // 更新 SeekBar 和时间显示
                             updateSeekHint(newPosition, seekDelta)
+                        }
+                    } else if (kotlin.math.abs(deltaY) > 50 && kotlin.math.abs(deltaY) > kotlin.math.abs(deltaX) * 2 && !isSeeking) {
+                        if (isControlsLocked) return@OnTouchListener true
+                        
+                        val viewWidth = view.width
+                        val isRightSide = touchStartX >= (view.rootView.width / 2f)
+                        
+                        if (isRightSide && !isAdjustingBrightness) {
+                            if (!isAdjustingVolume) {
+                                isAdjustingVolume = true
+                                initialVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                                longPressHandler.removeCallbacks(longPressRunnable)
+                                shouldIgnoreTap = true
+                            }
+                            adjustVolume(deltaY, view.rootView.height)
+                        } else if (!isRightSide && !isAdjustingVolume) {
+                            if (!isAdjustingBrightness) {
+                                isAdjustingBrightness = true
+                                initialBrightness = window.attributes.screenBrightness.let { if (it < 0f) 0.5f else it }
+                                longPressHandler.removeCallbacks(longPressRunnable)
+                                shouldIgnoreTap = true
+                            }
+                            adjustBrightness(deltaY, view.rootView.height)
                         }
                     }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    // 取消长按检测
                     longPressHandler.removeCallbacks(longPressRunnable)
 
                     if (isSeeking) {
-                        val deltaX = event.x - touchStartX
+                        val deltaX = event.rawX - touchStartX
                         val duration = mediaPlayer?.length ?: 0
                         if (duration > 0) {
                             val seekRange = 60_000L
@@ -524,15 +553,20 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                             mediaPlayer?.setTime(newPosition)
                         }
                         isSeeking = false
-                        // 滑动结束后恢复 5 秒倒计时（只有控制层显示时才设置）
                         if (controlsVisible) {
                             scheduleHideControls()
                         }
-                        // 滑动结束后重置忽略点击标记，使下次点击能立即响应
                         shouldIgnoreTap = false
                     }
 
-                    // 如果正在快进，恢复正常速度
+                    if (isAdjustingVolume || isAdjustingBrightness) {
+                        isAdjustingVolume = false
+                        isAdjustingBrightness = false
+                        handler.removeCallbacks(hideGestureHintRunnable)
+                        handler.postDelayed(hideGestureHintRunnable, 1000)
+                        shouldIgnoreTap = false
+                    }
+
                     if (isFastForwarding) {
                         mediaPlayer?.setRate(1.0f)
                         isFastForwarding = false
@@ -541,7 +575,6 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                 }
             }
             
-            // 返回 true 表示消费了触摸事件
             true
         }
         
@@ -852,10 +885,47 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     }
     
     private fun showSpeedHint(show: Boolean) {
-        // VLC 播放器可以添加速度提示 UI，暂时简化处理
         if (show) {
             Toast.makeText(this, "3x 倍速播放中", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun adjustVolume(deltaY: Float, viewHeight: Int) {
+        val deltaVolume = -(deltaY / viewHeight * maxVolume).toInt()
+        val newVolume = (initialVolume + deltaVolume).coerceIn(0, maxVolume)
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVolume, 0)
+        val percent = (newVolume.toFloat() / maxVolume * 100).toInt()
+        showGestureHint(isVolume = true, percent = percent)
+    }
+
+    private fun adjustBrightness(deltaY: Float, viewHeight: Int) {
+        val deltaBrightness = -(deltaY / viewHeight)
+        val newBrightness = (initialBrightness + deltaBrightness).coerceIn(0f, 1f)
+        window.attributes = window.attributes.apply { screenBrightness = newBrightness }
+        val percent = (newBrightness * 100).toInt()
+        showGestureHint(isVolume = false, percent = percent)
+    }
+
+    private fun showGestureHint(isVolume: Boolean, percent: Int) {
+        handler.removeCallbacks(hideGestureHintRunnable)
+        binding.ivGestureIcon.setImageResource(
+            if (isVolume) R.drawable.ic_volume_indicator else R.drawable.ic_brightness
+        )
+        binding.pbGesture.progress = percent
+        binding.tvGesturePercent.text = "$percent%"
+        if (!isLandscape) {
+            val videoHeightPx = (200 * resources.displayMetrics.density).toInt()
+            val rootViewHeight = binding.rootContainer.height
+            val offsetY = (videoHeightPx / 2f) - (rootViewHeight / 2f)
+            binding.gestureHintContainer.translationY = offsetY
+        } else {
+            binding.gestureHintContainer.translationY = 0f
+        }
+        binding.gestureHintContainer.visibility = View.VISIBLE
+    }
+
+    private fun hideGestureHint() {
+        binding.gestureHintContainer.visibility = View.GONE
     }
     
     private fun scheduleHideControls() {
@@ -974,6 +1044,8 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     
     private fun releaseAllResources() {
         stopProgressUpdate()
+        handler.removeCallbacks(hideGestureHintRunnable)
+        handler.removeCallbacks(hideControlsRunnable)
         try {
             mediaPlayer?.stop()
             mediaPlayer?.release()

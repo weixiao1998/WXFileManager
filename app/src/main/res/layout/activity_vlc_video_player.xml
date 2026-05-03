@@ -517,6 +517,47 @@
         </LinearLayout>
     </FrameLayout>
 
+    <LinearLayout
+        android:id="@+id/gesture_hint_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:background="#80000000"
+        android:paddingStart="16dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="10dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/iv_gesture_icon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_volume_indicator"
+            app:tint="@android:color/white" />
+
+        <ProgressBar
+            android:id="@+id/pb_gesture"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="100dp"
+            android:layout_height="4dp"
+            android:layout_marginStart="10dp"
+            android:max="100"
+            android:progress="50"
+            android:progressDrawable="@drawable/seekbar_progress" />
+
+        <TextView
+            android:id="@+id/tv_gesture_percent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:minWidth="36dp"
+            android:textColor="@android:color/white"
+            android:textSize="12sp" />
+    </LinearLayout>
+
     <ProgressBar
         android:id="@+id/progress_bar"
         android:layout_width="wrap_content"
