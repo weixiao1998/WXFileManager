@@ -571,6 +571,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                         mediaPlayer?.setRate(1.0f)
                         isFastForwarding = false
                         showSpeedHint(false)
+                        shouldIgnoreTap = false
                     }
                 }
             }
@@ -886,7 +887,10 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     
     private fun showSpeedHint(show: Boolean) {
         if (show) {
-            Toast.makeText(this, "3x 倍速播放中", Toast.LENGTH_SHORT).show()
+            binding.tvSpeedHintLandscape.text = "3x 倍速播放中"
+            binding.tvSpeedHintLandscape.visibility = View.VISIBLE
+        } else {
+            binding.tvSpeedHintLandscape.visibility = View.GONE
         }
     }
 
