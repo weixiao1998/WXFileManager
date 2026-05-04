@@ -280,7 +280,7 @@
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:padding="10dp"
             android:scaleType="fitCenter"
-            android:src="@drawable/ic_lock"
+            android:src="@drawable/ic_lock_off"
             android:visibility="gone"
             app:tint="@android:color/white" />
 

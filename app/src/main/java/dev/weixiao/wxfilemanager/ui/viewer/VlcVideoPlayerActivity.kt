@@ -80,12 +80,11 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     
     private val longPressHandler = Handler(Looper.getMainLooper())
     private val longPressRunnable = Runnable {
+        if (isControlsLocked) return@Runnable
         if (mediaPlayer?.isPlaying == true) {
-            // VLC 播放器设置 3 倍速
             mediaPlayer?.setRate(3.0f)
             isFastForwarding = true
             showSpeedHint(true)
-            // 标记为应该忽略后续的点击事件
             shouldIgnoreTap = true
         }
     }
@@ -387,9 +386,11 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
             if (isControlsLocked) {
                 hideControls()
                 binding.btnLockLandscape.visibility = View.VISIBLE
+                binding.btnLockLandscape.setImageResource(R.drawable.ic_lock_on)
                 Toast.makeText(this, "已锁定", Toast.LENGTH_SHORT).show()
             } else {
                 showControls()
+                binding.btnLockLandscape.setImageResource(R.drawable.ic_lock_off)
                 Toast.makeText(this, "已解锁", Toast.LENGTH_SHORT).show()
             }
         }
@@ -470,6 +471,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
             }
             
             override fun onDoubleTap(e: MotionEvent): Boolean {
+                if (isControlsLocked) return true
                 togglePlayPause()
                 return true
             }
@@ -490,7 +492,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                     isSeeking = false
                     isAdjustingVolume = false
                     isAdjustingBrightness = false
-                    if (mediaPlayer?.isPlaying == true) {
+                    if (mediaPlayer?.isPlaying == true && !isControlsLocked) {
                         longPressHandler.postDelayed(longPressRunnable, 500)
                     }
                 }
@@ -499,6 +501,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                     val deltaY = event.rawY - touchStartY
                     
                     if (kotlin.math.abs(deltaX) > 50 && kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY) * 2 && !isAdjustingVolume && !isAdjustingBrightness) {
+                        if (isControlsLocked) return@OnTouchListener true
                         if (!isSeeking) {
                             isSeeking = true
                             longPressHandler.removeCallbacks(longPressRunnable)
