@@ -78,6 +78,9 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     private var currentEpisodePosition = 0
     private lateinit var episodeAdapter: VideoEpisodeAdapter
     
+    // 标记当前是否为 .ts 文件（若 duration 为 0 则使用 position 进度）
+    private var isTsFile = false
+    
     private val longPressHandler = Handler(Looper.getMainLooper())
     private val longPressRunnable = Runnable {
         if (isControlsLocked) return@Runnable
@@ -143,6 +146,8 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                 add("--aout=opensles")
                 add("--no-video-title-show")
                 add("--verbose=0")
+                // 启用 timeshift 以支持 .ts 等流式格式的 seek 和时长获取
+                add("--input-timeshift-granularity=0")
             }
             
             libVLC = LibVLC(this.applicationContext, args)
@@ -404,10 +409,15 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         binding.seekbarPortrait.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser && mediaPlayer != null && !isUpdatingSeekBar) {
-                    val duration = mediaPlayer?.length ?: 0L
-                    if (duration > 0) {
-                        val position = (progress * duration / 1000L).toLong()
-                        mediaPlayer?.setTime(position)
+                    if (isTsFile) {
+                        // .ts 文件使用 position (0.0~1.0) 跳转
+                        mediaPlayer?.position = progress / 1000f
+                    } else {
+                        val duration = mediaPlayer?.length ?: 0L
+                        if (duration > 0) {
+                            val position = (progress * duration / 1000L).toLong()
+                            mediaPlayer?.setTime(position)
+                        }
                     }
                 }
             }
@@ -424,10 +434,15 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         binding.seekbarLandscape.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser && mediaPlayer != null && !isUpdatingSeekBar) {
-                    val duration = mediaPlayer?.length ?: 0L
-                    if (duration > 0) {
-                        val position = (progress * duration / 1000L).toLong()
-                        mediaPlayer?.setTime(position)
+                    if (isTsFile) {
+                        // .ts 文件使用 position (0.0~1.0) 跳转
+                        mediaPlayer?.position = progress / 1000f
+                    } else {
+                        val duration = mediaPlayer?.length ?: 0L
+                        if (duration > 0) {
+                            val position = (progress * duration / 1000L).toLong()
+                            mediaPlayer?.setTime(position)
+                        }
                     }
                 }
             }
@@ -509,13 +524,25 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                             showControlsForSeek()
                         }
                         
-                        val duration = mediaPlayer?.length ?: 0
-                        if (duration > 0) {
-                            val seekRange = 60_000L
+                        if (isTsFile) {
                             val viewWidth = if (isLandscape) binding.landscapeContainer.width else binding.vlcSurfaceView.width
-                            val seekDelta = (deltaX / viewWidth * seekRange).toLong()
-                            val newPosition = (seekStartMs + seekDelta).coerceIn(0, duration)
-                            updateSeekHint(newPosition, seekDelta)
+                            val seekPercent = (deltaX / viewWidth * 0.1f)
+                            val currentPos = mediaPlayer?.position ?: 0f
+                            val newPos = (currentPos + seekPercent).coerceIn(0f, 1f)
+                            isUpdatingSeekBar = true
+                            val progress = (newPos * 1000).toInt().coerceIn(0, 1000)
+                            binding.seekbarPortrait.progress = progress
+                            binding.seekbarLandscape.progress = progress
+                            isUpdatingSeekBar = false
+                        } else {
+                            val duration = mediaPlayer?.length ?: 0
+                            if (duration > 0) {
+                                val seekRange = 60_000L
+                                val viewWidth = if (isLandscape) binding.landscapeContainer.width else binding.vlcSurfaceView.width
+                                val seekDelta = (deltaX / viewWidth * seekRange).toLong()
+                                val newPosition = (seekStartMs + seekDelta).coerceIn(0, duration)
+                                updateSeekHint(newPosition, seekDelta)
+                            }
                         }
                     } else if (kotlin.math.abs(deltaY) > 50 && kotlin.math.abs(deltaY) > kotlin.math.abs(deltaX) * 2 && !isSeeking) {
                         if (isControlsLocked) return@OnTouchListener true
@@ -547,13 +574,22 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
 
                     if (isSeeking) {
                         val deltaX = event.rawX - touchStartX
-                        val duration = mediaPlayer?.length ?: 0
-                        if (duration > 0) {
-                            val seekRange = 60_000L
+                        if (isTsFile) {
+                            // .ts 文件使用 position 百分比跳转
                             val viewWidth = if (isLandscape) binding.landscapeContainer.width else binding.vlcSurfaceView.width
-                            val seekDelta = (deltaX / viewWidth * seekRange).toLong()
-                            val newPosition = (seekStartMs + seekDelta).coerceIn(0, duration)
-                            mediaPlayer?.setTime(newPosition)
+                            val seekPercent = (deltaX / viewWidth * 0.1f)
+                            val currentPos = mediaPlayer?.position ?: 0f
+                            val newPos = (currentPos + seekPercent).coerceIn(0f, 1f)
+                            mediaPlayer?.position = newPos
+                        } else {
+                            val duration = mediaPlayer?.length ?: 0
+                            if (duration > 0) {
+                                val seekRange = 60_000L
+                                val viewWidth = if (isLandscape) binding.landscapeContainer.width else binding.vlcSurfaceView.width
+                                val seekDelta = (deltaX / viewWidth * seekRange).toLong()
+                                val newPosition = (seekStartMs + seekDelta).coerceIn(0, duration)
+                                mediaPlayer?.setTime(newPosition)
+                            }
                         }
                         isSeeking = false
                         if (controlsVisible) {
@@ -644,6 +680,8 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     }
     
     private fun loadVideo(path: String) {
+        isTsFile = path.endsWith(".ts", ignoreCase = true)
+        
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val uri = if (isSmbFile) {
@@ -683,11 +721,18 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                         val vlcInstance = libVLC ?: return@withContext
                         val player = mediaPlayer ?: return@withContext
                         
-                        val media = Media(vlcInstance, uri)
+                        val media = Media(vlcInstance, uri).apply {
+                            if (isTsFile) {
+                                addOption(":input-timeshift=1")
+                                addOption(":file-caching=5000")
+                                addOption(":network-caching=5000")
+                                addOption(":smb-seekable=1")
+                                addOption(":ts-seek-percent=1")
+                            }
+                        }
                         
                         player.media = media
                         media.release()
-                        
                         player.play()
                         
                     } catch (e: Exception) {
@@ -726,8 +771,16 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     
     private fun seekRelative(offsetMs: Long) {
         val player = mediaPlayer ?: return
-        val newPosition = (player.time + offsetMs).coerceIn(0, player.length.toLong())
-        player.setTime(newPosition)
+        if (isTsFile) {
+            // .ts 文件使用 position 百分比跳转（约 10 秒 ≈ 假设总时长 1 小时的 0.28%）
+            // 简化处理：每次快进/快退 2% 的位置
+            val offsetPercent = if (offsetMs > 0) 0.02f else -0.02f
+            val newPos = (player.position + offsetPercent).coerceIn(0f, 1f)
+            player.position = newPos
+        } else {
+            val newPosition = (player.time + offsetMs).coerceIn(0, player.length.toLong())
+            player.setTime(newPosition)
+        }
     }
     
     private fun startProgressUpdate() {
@@ -751,27 +804,37 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     private fun updateProgress() {
         if (isSeeking) return
         val player = mediaPlayer ?: return
-        val position = player.time
         val duration = player.length
         
-        val timeText = formatTime(position)
+        val timeText = formatTime(player.time)
         binding.tvCurrentTimePortrait.text = timeText
         binding.tvCurrentTimeLandscape.text = timeText
         
         if (duration > 0) {
-            val progress = ((position * 1000) / duration).toInt()
-            binding.seekbarPortrait.progress = progress
-            binding.seekbarLandscape.progress = progress
+            val progress = ((player.time * 1000) / duration).toInt()
+            binding.seekbarPortrait.progress = progress.coerceIn(0, 1000)
+            binding.seekbarLandscape.progress = progress.coerceIn(0, 1000)
+        } else if (isTsFile) {
+            val pos = player.position
+            val progress = (pos * 1000).toInt()
+            binding.seekbarPortrait.progress = progress.coerceIn(0, 1000)
+            binding.seekbarLandscape.progress = progress.coerceIn(0, 1000)
         }
     }
     
     private fun updateDuration() {
         val player = mediaPlayer ?: return
         val duration = player.length
-        val durationText = formatTime(duration)
-        binding.tvDurationPortrait.text = durationText
-        binding.tvDurationLandscape.text = durationText
-        binding.tvVideoInfo.text = "时长: $durationText"
+        if (duration > 0) {
+            val durationText = formatTime(duration)
+            binding.tvDurationPortrait.text = durationText
+            binding.tvDurationLandscape.text = durationText
+            binding.tvVideoInfo.text = "时长: $durationText"
+        } else if (isTsFile) {
+            binding.tvDurationPortrait.text = "--:--"
+            binding.tvDurationLandscape.text = "--:--"
+            binding.tvVideoInfo.text = "时长: --:--"
+        }
     }
     
     private fun formatTime(ms: Long): String {
