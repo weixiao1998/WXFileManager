@@ -1,4 +1,4 @@
-﻿package dev.weixiao.wxfilemanager.ui.viewer
+package dev.weixiao.wxfilemanager.ui.viewer
 
 import android.os.Bundle
 import android.view.MenuItem
@@ -137,6 +137,47 @@ class SearchActivity : AppCompatActivity() {
                 putExtra("isSmb", file.isSmb)
             }
             startActivity(intent)
+        } else if (file.isText) {
+            val intent = android.content.Intent(this, TextViewerActivity::class.java).apply {
+                putExtra("name", file.name)
+                putExtra("path", file.path)
+                putExtra("isSmb", file.isSmb)
+                putExtra("size", file.size)
+            }
+            startActivity(intent)
+        } else if (file.isSmb) {
+            showSmbFileOpenDialog(file)
+        } else {
+            dev.weixiao.wxfilemanager.utils.FileOpener.openWithExternalApp(this, file)
+        }
+    }
+
+    private fun showSmbFileOpenDialog(file: FileModel) {
+        val sizeStr = android.text.format.Formatter.formatFileSize(this, file.size)
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(file.name)
+            .setMessage("此文件类型暂不支持内置打开（大小: $sizeStr）\n是否下载到本地后用其他应用打开？")
+            .setPositiveButton("下载并打开") { _, _ ->
+                downloadAndOpenSmbFile(file)
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun downloadAndOpenSmbFile(file: FileModel) {
+        binding.progressBar.visibility = View.VISIBLE
+        lifecycleScope.launch {
+            val cachedFile = dev.weixiao.wxfilemanager.utils.FileOpener.downloadSmbFileToCache(this@SearchActivity, file)
+            binding.progressBar.visibility = View.GONE
+            if (cachedFile != null) {
+                dev.weixiao.wxfilemanager.utils.FileOpener.openCachedFileWithExternalApp(
+                    this@SearchActivity, cachedFile, file.mimeType
+                )
+            } else {
+                android.widget.Toast.makeText(
+                    this@SearchActivity, "下载失败，请检查网络连接", android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 

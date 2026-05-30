@@ -459,7 +459,34 @@ class SmbFragment : Fragment() {
             }
             startActivity(intent)
         } else {
-            Toast.makeText(context, "Opening SMB file: ${file.name}", Toast.LENGTH_SHORT).show()
+            showSmbFileOpenDialog(file)
+        }
+    }
+
+    private fun showSmbFileOpenDialog(file: FileModel) {
+        val sizeStr = android.text.format.Formatter.formatFileSize(requireContext(), file.size)
+        AlertDialog.Builder(requireContext())
+            .setTitle(file.name)
+            .setMessage("此文件类型暂不支持内置打开（大小: $sizeStr）\n是否下载到本地后用其他应用打开？")
+            .setPositiveButton("下载并打开") { _, _ ->
+                downloadAndOpenSmbFile(file)
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun downloadAndOpenSmbFile(file: FileModel) {
+        binding.loadingIndicator.visibility = View.VISIBLE
+        CoroutineScope(Dispatchers.Main).launch {
+            val cachedFile = dev.weixiao.wxfilemanager.utils.FileOpener.downloadSmbFileToCache(requireContext(), file)
+            binding.loadingIndicator.visibility = View.GONE
+            if (cachedFile != null) {
+                dev.weixiao.wxfilemanager.utils.FileOpener.openCachedFileWithExternalApp(
+                    requireContext(), cachedFile, file.mimeType
+                )
+            } else {
+                Toast.makeText(context, "下载失败，请检查网络连接", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

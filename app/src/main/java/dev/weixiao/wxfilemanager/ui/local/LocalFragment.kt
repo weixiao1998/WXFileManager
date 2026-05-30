@@ -360,7 +360,7 @@ class LocalFragment : Fragment() {
             }
             startActivity(intent)
         } else {
-            Toast.makeText(context, "Opening file: ${file.name}", Toast.LENGTH_SHORT).show()
+            dev.weixiao.wxfilemanager.utils.FileOpener.openWithExternalApp(requireContext(), file)
         }
     }
     
