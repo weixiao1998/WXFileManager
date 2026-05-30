@@ -1,4 +1,4 @@
-﻿package dev.weixiao.wxfilemanager.model
+package dev.weixiao.wxfilemanager.model
 
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
@@ -33,8 +33,8 @@ data class FileModel(
     
     val isVideo: Boolean
         get() {
-            if (mimeType?.startsWith("video/") == true && mimeType != "video/avi" && mimeType != "video/x-msvideo") return true
-            val videoExtensions = listOf("mp4", "mkv", "mov", "wmv", "flv", "3gp", "ts", "webm", "m4v", "rmvb", "rm")
+            if (mimeType?.startsWith("video/") == true) return true
+            val videoExtensions = listOf("mp4", "mkv", "mov", "wmv", "flv", "3gp", "ts", "webm", "m4v", "rmvb", "rm", "avi")
             val extension = name.substringAfterLast('.', "").lowercase()
             return videoExtensions.contains(extension)
         }

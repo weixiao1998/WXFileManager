@@ -1,4 +1,4 @@
-﻿package dev.weixiao.wxfilemanager.ui.viewer
+package dev.weixiao.wxfilemanager.ui.viewer
 
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
@@ -25,17 +25,28 @@ class ImageViewerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         supportActionBar?.hide()
-        
-        window.statusBarColor = android.graphics.Color.BLACK
-        window.navigationBarColor = android.graphics.Color.BLACK
-        
+
+        // 必须在 setContentView 之前调用，让窗口内容延伸到系统栏背后，
+        // 避免系统栏显示/隐藏时根视图被重新布局导致图片位置抖动
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+
         binding = ActivityImageViewerBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // 在根容器上消费 insets，阻止系统栏 insets 影响任何子 View 的布局。
+        // 由于系统栏始终隐藏，无需为 top_bar 预留状态栏 padding。
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, _ ->
+            WindowInsetsCompat.CONSUMED
+        }
 
         val imageList = dev.weixiao.wxfilemanager.utils.MediaRepository.getImageList()
         val initialPosition = intent.getIntExtra("position", 0)
 
         updateTitle(imageList.getOrNull(initialPosition)?.name ?: "")
+        updateProgress(initialPosition, imageList.size)
 
         adapter = ImagePagerAdapter {
             toggleFullscreen()
@@ -47,6 +58,7 @@ class ImageViewerActivity : AppCompatActivity() {
         binding.viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 updateTitle(imageList.getOrNull(position)?.name ?: "")
+                updateProgress(position, imageList.size)
             }
         })
 
@@ -70,23 +82,28 @@ class ImageViewerActivity : AppCompatActivity() {
         binding.tvTitle.text = name
     }
 
+    private fun updateProgress(position: Int, total: Int) {
+        binding.tvProgress.text = if (total > 0) "${position + 1}/$total" else ""
+    }
+
     private fun toggleFullscreen() {
         isFullscreen = !isFullscreen
         setImmersiveMode(isFullscreen)
     }
 
     private fun setImmersiveMode(enable: Boolean) {
-        isFullscreen = enable
+        // 始终保持系统栏隐藏，仅切换自定义信息层的可见性，
+        // 避免系统栏显隐导致图片位置变动
         val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
         windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
 
+        isFullscreen = enable
         if (enable) {
-            windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
             binding.topBar.visibility = View.GONE
             binding.topMask.visibility = View.GONE
             binding.bottomMask.visibility = View.GONE
         } else {
-            windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
             binding.topBar.visibility = View.VISIBLE
             binding.topMask.visibility = View.VISIBLE
             binding.bottomMask.visibility = View.VISIBLE
