@@ -1,5 +1,6 @@
 package dev.weixiao.wxfilemanager.ui.viewer
 
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.media.AudioManager
@@ -12,7 +13,10 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -92,8 +96,22 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         }
     }
 
+    private var currentSpuDelay: Long = 0L
+    private var skipNextResumeReload = false
+
+    private val subtitlePickerLauncher: ActivityResultLauncher<Intent> = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data?.let { uri ->
+                loadExternalSubtitle(uri.toString())
+            }
+        }
+    }
+
     companion object {
         private const val TAG = "VlcVideoPlayer"
+        private val SUBTITLE_EXTENSIONS = listOf("srt", "vtt", "ass", "ssa")
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -285,6 +303,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         currentEpisodePosition = position
         currentPath = file.path
         currentName = file.name
+        currentSpuDelay = 0L
 
         episodeAdapter.setCurrentPlaying(position)
 
@@ -1060,7 +1079,168 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     }
 
     private fun showSubtitleSelectionDialog() {
-        Toast.makeText(this, "字幕选择功能开发中", Toast.LENGTH_SHORT).show()
+        CoroutineScope(Dispatchers.IO).launch {
+            val externalSubtitles = if (isSmbFile) {
+                SmbManager.findSubtitles(currentPath).mapNotNull { f ->
+                    f.smbUrl?.let { f.name to it }
+                }
+            } else {
+                findLocalSubtitles(currentPath).map { it.name to "file://${it.absolutePath}" }
+            }
+
+            val embeddedTracks = withContext(Dispatchers.Main) {
+                mediaPlayer?.spuTracks?.toList() ?: emptyList()
+            }
+
+            withContext(Dispatchers.Main) {
+                showSubtitleDialog(embeddedTracks, externalSubtitles)
+            }
+        }
+    }
+
+    private fun showSubtitleDialog(
+        embeddedTracks: List<MediaPlayer.TrackDescription>,
+        externalSubtitles: List<Pair<String, String>>
+    ) {
+        val currentSpuTrack = mediaPlayer?.spuTrack ?: -1
+
+        val items = mutableListOf<String>()
+        val actions = mutableListOf<() -> Unit>()
+
+        val closePrefix = if (currentSpuTrack <= 0) "● " else "  "
+        items.add("${closePrefix}关闭")
+        actions.add {
+            mediaPlayer?.setSpuTrack(-1)
+            Toast.makeText(this, "字幕已关闭", Toast.LENGTH_SHORT).show()
+        }
+
+        for (track in embeddedTracks) {
+            if (track.id <= 0) continue
+            val prefix = if (track.id == currentSpuTrack) "● " else "  "
+            items.add("${prefix}${track.name}")
+            actions.add {
+                mediaPlayer?.setSpuTrack(track.id)
+                Toast.makeText(this, track.name, Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        for ((name, uri) in externalSubtitles) {
+            items.add("  $name")
+            actions.add {
+                loadExternalSubtitle(uri)
+            }
+        }
+
+        items.add("手动选择字幕文件")
+        actions.add {
+            openSubtitleFilePicker()
+        }
+
+        items.add("字幕延迟调整")
+        actions.add {
+            showSubtitleDelayDialog()
+        }
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("字幕选择")
+            .setItems(items.toTypedArray()) { _, which ->
+                actions[which]()
+            }
+            .show()
+    }
+
+    private fun findLocalSubtitles(videoPath: String): List<JFile> {
+        val videoFile = JFile(videoPath)
+        val parentDir = videoFile.parentFile ?: return emptyList()
+        val videoBaseName = videoFile.nameWithoutExtension
+
+        return parentDir.listFiles()?.filter { file ->
+            val ext = file.extension.lowercase()
+            val baseName = file.nameWithoutExtension
+            SUBTITLE_EXTENSIONS.contains(ext) && baseName.startsWith(videoBaseName)
+        }?.sortedBy { it.name } ?: emptyList()
+    }
+
+    private fun loadExternalSubtitle(uriString: String) {
+        val player = mediaPlayer ?: return
+        val success = player.addSlave(1, uriString, true)
+        if (success) {
+            Toast.makeText(this, "字幕已加载", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "字幕加载失败", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun openSubtitleFilePicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                "application/x-subrip",
+                "text/vtt",
+                "text/plain"
+            ))
+        }
+        try {
+            skipNextResumeReload = true
+            subtitlePickerLauncher.launch(intent)
+        } catch (e: Exception) {
+            skipNextResumeReload = false
+            Log.e(TAG, "无法打开文件选择器", e)
+            Toast.makeText(this, "无法打开文件选择器", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showSubtitleDelayDialog() {
+        val delayMs = mediaPlayer?.spuDelay ?: currentSpuDelay
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+
+        val delayText = android.widget.TextView(this).apply {
+            text = formatSubtitleDelay(delayMs)
+            textSize = 18f
+            gravity = android.view.Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        val btnMinus = android.widget.Button(this).apply {
+            text = "-0.5s"
+            setOnClickListener {
+                val newDelay = (mediaPlayer?.spuDelay ?: currentSpuDelay) - 500
+                currentSpuDelay = newDelay
+                mediaPlayer?.setSpuDelay(newDelay)
+                delayText.text = formatSubtitleDelay(newDelay)
+            }
+        }
+
+        val btnPlus = android.widget.Button(this).apply {
+            text = "+0.5s"
+            setOnClickListener {
+                val newDelay = (mediaPlayer?.spuDelay ?: currentSpuDelay) + 500
+                currentSpuDelay = newDelay
+                mediaPlayer?.setSpuDelay(newDelay)
+                delayText.text = formatSubtitleDelay(newDelay)
+            }
+        }
+
+        container.addView(btnMinus)
+        container.addView(delayText)
+        container.addView(btnPlus)
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("字幕延迟调整")
+            .setView(container)
+            .setPositiveButton("确定", null)
+            .show()
+    }
+
+    private fun formatSubtitleDelay(delayMs: Long): String {
+        val sec = delayMs / 1000.0
+        return if (sec >= 0) "+${String.format("%.1f", sec)}s" else "${String.format("%.1f", sec)}s"
     }
 
     private fun showAudioTrackSelectionDialog() {
@@ -1094,9 +1274,9 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     
     override fun onResume() {
         super.onResume()
-        if (isFirstResume) {
-            isFirstResume = false
-        } else {
+        if (skipNextResumeReload) {
+            skipNextResumeReload = false
+        } else if (!isFirstResume) {
             restorePosition = mediaPlayer?.time ?: 0L
             restorePlaying = mediaPlayer?.isPlaying ?: false
             mediaPlayer?.stop()
@@ -1104,6 +1284,9 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
             if (currentPath.isNotEmpty()) {
                 loadVideo(currentPath)
             }
+        }
+        if (isFirstResume) {
+            isFirstResume = false
         }
         if (isSmbFile) {
             CoroutineScope(Dispatchers.IO).launch {
