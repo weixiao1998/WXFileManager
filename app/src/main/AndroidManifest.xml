@@ -37,6 +37,10 @@
         <activity 
             android:name=".ui.viewer.SearchActivity"
             android:theme="@style/Theme.WXFileManager.NoActionBar" />
+        <activity
+            android:name=".ui.viewer.TextViewerActivity"
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
+            android:theme="@style/Theme.WXFileManager.NoActionBar" />
     </application>
 
 </manifest>

@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.parcelize)
+    alias(libs.plugins.kotlin.kapt)
 }
 
 android {
@@ -82,6 +83,17 @@ dependencies {
     // UI
     implementation(libs.recyclerview)
     implementation(libs.swiperefreshlayout)
+
+    // Charset Detection
+    implementation(libs.juniversalchardet)
+
+    // Syntax Highlighting
+    implementation(libs.prism4j) {
+        exclude(group = "org.jetbrains", module = "annotations-java5")
+    }
+    kapt(libs.prism4j.bundler) {
+        exclude(group = "org.jetbrains", module = "annotations-java5")
+    }
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

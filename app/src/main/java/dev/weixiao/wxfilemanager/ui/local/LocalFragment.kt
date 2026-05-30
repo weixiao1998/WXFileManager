@@ -1,4 +1,4 @@
-﻿package dev.weixiao.wxfilemanager.ui.local
+package dev.weixiao.wxfilemanager.ui.local
 
 import android.app.Activity
 import android.content.Intent
@@ -349,6 +349,14 @@ class LocalFragment : Fragment() {
                 putExtra("isSmb", false)
                 putExtra("size", file.size)
                 putExtra("lastModified", file.lastModified)
+            }
+            startActivity(intent)
+        } else if (file.isText) {
+            val intent = android.content.Intent(requireContext(), dev.weixiao.wxfilemanager.ui.viewer.TextViewerActivity::class.java).apply {
+                putExtra("name", file.name)
+                putExtra("path", file.path)
+                putExtra("isSmb", false)
+                putExtra("size", file.size)
             }
             startActivity(intent)
         } else {

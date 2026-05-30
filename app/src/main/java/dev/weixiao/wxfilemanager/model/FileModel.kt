@@ -38,4 +38,38 @@ data class FileModel(
             val extension = name.substringAfterLast('.', "").lowercase()
             return videoExtensions.contains(extension)
         }
+
+    val isText: Boolean
+        get() {
+            if (isDirectory) return false
+            if (mimeType?.startsWith("text/") == true) return true
+            if (mimeType != null && mimeType in TEXT_MIME_WHITELIST) return true
+            val extension = name.substringAfterLast('.', "").lowercase()
+            if (extension.isEmpty()) {
+                val lowerName = name.lowercase()
+                return lowerName in NO_EXT_TEXT_FILES
+            }
+            return extension in TEXT_EXTENSIONS
+        }
+
+    companion object {
+        private val TEXT_EXTENSIONS = setOf(
+            "txt", "log", "md", "markdown", "rst",
+            "json", "xml", "yml", "yaml", "toml", "ini", "conf", "properties", "csv", "tsv",
+            "html", "htm", "css", "scss", "less", "js", "jsx", "ts", "tsx", "vue",
+            "kt", "kts", "java", "py", "rb", "go", "rs", "swift", "dart", "groovy",
+            "c", "cpp", "cc", "cxx", "h", "hpp", "m", "mm",
+            "sh", "bash", "zsh", "bat", "cmd", "ps1",
+            "sql", "gradle", "pro", "gitignore", "gitattributes", "env",
+            "srt", "vtt", "ass", "lrc"
+        )
+        private val TEXT_MIME_WHITELIST = setOf(
+            "application/json", "application/xml", "application/javascript",
+            "application/x-sh", "application/x-yaml", "application/x-properties",
+            "application/x-shellscript", "application/sql"
+        )
+        private val NO_EXT_TEXT_FILES = setOf(
+            "readme", "license", "makefile", "dockerfile", "changelog", "authors", "notice"
+        )
+    }
 }

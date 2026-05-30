@@ -1,4 +1,4 @@
-﻿package dev.weixiao.wxfilemanager.ui.smb
+package dev.weixiao.wxfilemanager.ui.smb
 
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -448,6 +448,14 @@ class SmbFragment : Fragment() {
                 putExtra("name", file.name)
                 putExtra("path", file.path)
                 putExtra("isSmb", true)
+            }
+            startActivity(intent)
+        } else if (file.isText) {
+            val intent = android.content.Intent(requireContext(), dev.weixiao.wxfilemanager.ui.viewer.TextViewerActivity::class.java).apply {
+                putExtra("name", file.name)
+                putExtra("path", file.path)
+                putExtra("isSmb", true)
+                putExtra("size", file.size)
             }
             startActivity(intent)
         } else {

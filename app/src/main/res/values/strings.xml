@@ -4,4 +4,21 @@
     <string name="tab_network">局域网</string>
     <string name="search_hint">搜索文件…</string>
     <string name="sort_files">排列</string>
+
+    <!-- Text Viewer -->
+    <string name="text_viewer_loading">加载中…</string>
+    <string name="text_viewer_too_large">文件过大，无法预览（%1$s）</string>
+    <string name="text_viewer_load_failed">加载失败：%1$s</string>
+    <string name="text_viewer_search">搜索</string>
+    <string name="text_viewer_search_hint">在文本中搜索…</string>
+    <string name="text_viewer_prev">上一个</string>
+    <string name="text_viewer_next">下一个</string>
+    <string name="text_viewer_close_search">关闭搜索</string>
+    <string name="text_viewer_no_match">未找到</string>
+    <string name="text_viewer_match_format">%1$d/%2$d</string>
+    <string name="text_viewer_font_inc">字号 +</string>
+    <string name="text_viewer_font_dec">字号 −</string>
+    <string name="text_viewer_encoding">字符编码</string>
+    <string name="text_viewer_encoding_auto">自动检测</string>
+    <string name="text_viewer_charset_label">当前编码：%1$s</string>
 </resources>

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_search"
+        android:icon="@drawable/ic_search"
+        android:title="@string/text_viewer_search"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_font_inc"
+        android:title="@string/text_viewer_font_inc"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_font_dec"
+        android:title="@string/text_viewer_font_dec"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_encoding"
+        android:title="@string/text_viewer_encoding"
+        app:showAsAction="never">
+        <menu>
+            <group android:checkableBehavior="single">
+                <item
+                    android:id="@+id/encoding_auto"
+                    android:title="@string/text_viewer_encoding_auto" />
+                <item
+                    android:id="@+id/encoding_utf8"
+                    android:title="UTF-8" />
+                <item
+                    android:id="@+id/encoding_gbk"
+                    android:title="GBK" />
+                <item
+                    android:id="@+id/encoding_gb18030"
+                    android:title="GB18030" />
+                <item
+                    android:id="@+id/encoding_utf16"
+                    android:title="UTF-16" />
+                <item
+                    android:id="@+id/encoding_latin1"
+                    android:title="ISO-8859-1" />
+                <item
+                    android:id="@+id/encoding_big5"
+                    android:title="Big5" />
+            </group>
+        </menu>
+    </item>
+
+</menu>
