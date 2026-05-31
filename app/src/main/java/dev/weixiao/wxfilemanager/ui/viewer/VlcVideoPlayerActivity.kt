@@ -97,6 +97,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     }
 
     private var currentSpuDelay: Long = 0L
+    private var currentAudioDelay: Long = 0L
     private var skipNextResumeReload = false
 
     private val subtitlePickerLauncher: ActivityResultLauncher<Intent> = registerForActivityResult(
@@ -109,9 +110,20 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         }
     }
 
+    private val audioTrackPickerLauncher: ActivityResultLauncher<Intent> = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data?.let { uri ->
+                loadExternalAudioTrack(uri.toString())
+            }
+        }
+    }
+
     companion object {
         private const val TAG = "VlcVideoPlayer"
         private val SUBTITLE_EXTENSIONS = listOf("srt", "vtt", "ass", "ssa")
+        private val AUDIO_EXTENSIONS = listOf("mp3", "aac", "ac3", "dts", "flac", "m4a", "wav", "ogg", "opus", "mka")
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -1244,7 +1256,163 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     }
 
     private fun showAudioTrackSelectionDialog() {
-        Toast.makeText(this, "音轨选择功能开发中", Toast.LENGTH_SHORT).show()
+        CoroutineScope(Dispatchers.IO).launch {
+            val externalAudios = if (isSmbFile) {
+                SmbManager.findAudioTracks(currentPath).mapNotNull { f ->
+                    f.smbUrl?.let { f.name to it }
+                }
+            } else {
+                findLocalAudioTracks(currentPath).map { it.name to "file://${it.absolutePath}" }
+            }
+
+            val embeddedTracks = withContext(Dispatchers.Main) {
+                mediaPlayer?.audioTracks?.toList() ?: emptyList()
+            }
+
+            withContext(Dispatchers.Main) {
+                showAudioTrackDialog(embeddedTracks, externalAudios)
+            }
+        }
+    }
+
+    private fun showAudioTrackDialog(
+        embeddedTracks: List<MediaPlayer.TrackDescription>,
+        externalAudios: List<Pair<String, String>>
+    ) {
+        val currentAudioTrack = mediaPlayer?.audioTrack ?: -1
+
+        val items = mutableListOf<String>()
+        val actions = mutableListOf<() -> Unit>()
+
+        val closePrefix = if (currentAudioTrack <= 0) "● " else "  "
+        items.add("${closePrefix}关闭")
+        actions.add {
+            mediaPlayer?.setAudioTrack(-1)
+            Toast.makeText(this, "音轨已关闭", Toast.LENGTH_SHORT).show()
+        }
+
+        for (track in embeddedTracks) {
+            if (track.id <= 0) continue
+            val prefix = if (track.id == currentAudioTrack) "● " else "  "
+            items.add("${prefix}${track.name}")
+            actions.add {
+                mediaPlayer?.setAudioTrack(track.id)
+                Toast.makeText(this, track.name, Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        for ((name, uri) in externalAudios) {
+            items.add("  $name")
+            actions.add {
+                loadExternalAudioTrack(uri)
+            }
+        }
+
+        items.add("手动选择音轨文件")
+        actions.add {
+            openAudioTrackFilePicker()
+        }
+
+        items.add("音频延迟调整")
+        actions.add {
+            showAudioDelayDialog()
+        }
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("音轨选择")
+            .setItems(items.toTypedArray()) { _, which ->
+                actions[which]()
+            }
+            .show()
+    }
+
+    private fun findLocalAudioTracks(videoPath: String): List<JFile> {
+        val videoFile = JFile(videoPath)
+        val parentDir = videoFile.parentFile ?: return emptyList()
+        val videoBaseName = videoFile.nameWithoutExtension
+
+        return parentDir.listFiles()?.filter { file ->
+            val ext = file.extension.lowercase()
+            val baseName = file.nameWithoutExtension
+            AUDIO_EXTENSIONS.contains(ext) && baseName.startsWith(videoBaseName)
+        }?.sortedBy { it.name } ?: emptyList()
+    }
+
+    private fun loadExternalAudioTrack(uriString: String) {
+        val player = mediaPlayer ?: return
+        val success = player.addSlave(0, uriString, true)
+        if (success) {
+            Toast.makeText(this, "音轨已加载", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "音轨加载失败", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun openAudioTrackFilePicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "audio/*"
+        }
+        try {
+            skipNextResumeReload = true
+            audioTrackPickerLauncher.launch(intent)
+        } catch (e: Exception) {
+            skipNextResumeReload = false
+            Log.e(TAG, "无法打开文件选择器", e)
+            Toast.makeText(this, "无法打开文件选择器", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showAudioDelayDialog() {
+        val delayUs = mediaPlayer?.audioDelay ?: currentAudioDelay
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+
+        val delayText = android.widget.TextView(this).apply {
+            text = formatAudioDelay(delayUs)
+            textSize = 18f
+            gravity = android.view.Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        val btnMinus = android.widget.Button(this).apply {
+            text = "-0.5s"
+            setOnClickListener {
+                val newDelay = (mediaPlayer?.audioDelay ?: currentAudioDelay) - 500_000L
+                currentAudioDelay = newDelay
+                mediaPlayer?.setAudioDelay(newDelay)
+                delayText.text = formatAudioDelay(newDelay)
+            }
+        }
+
+        val btnPlus = android.widget.Button(this).apply {
+            text = "+0.5s"
+            setOnClickListener {
+                val newDelay = (mediaPlayer?.audioDelay ?: currentAudioDelay) + 500_000L
+                currentAudioDelay = newDelay
+                mediaPlayer?.setAudioDelay(newDelay)
+                delayText.text = formatAudioDelay(newDelay)
+            }
+        }
+
+        container.addView(btnMinus)
+        container.addView(delayText)
+        container.addView(btnPlus)
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("音频延迟调整")
+            .setView(container)
+            .setPositiveButton("确定", null)
+            .show()
+    }
+
+    private fun formatAudioDelay(delayUs: Long): String {
+        val sec = delayUs / 1_000_000.0
+        return if (sec >= 0) "+${String.format("%.1f", sec)}s" else String.format("%.1f", sec) + "s"
     }
 
     private fun showMenuDialog() {

@@ -1,4 +1,4 @@
-﻿package dev.weixiao.wxfilemanager.utils
+package dev.weixiao.wxfilemanager.utils
 
 import android.webkit.MimeTypeMap
 import com.hierynomus.msdtyp.AccessMask
@@ -388,6 +388,38 @@ object SmbManager {
                     size = fileInfo.endOfFile,
                     lastModified = fileInfo.changeTime.toEpochMillis(),
                     mimeType = "application/x-subrip", // Default, will be handled by Media3
+                    isSmb = true,
+                    smbUrl = "smb://$fullPath"
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    suspend fun findAudioTracks(videoPath: String): List<FileModel> = withContext(Dispatchers.IO) {
+        if (!ensureConnected()) return@withContext emptyList()
+        val share = diskShare ?: return@withContext emptyList()
+        try {
+            val parentPath = videoPath.substringBeforeLast('\\', "")
+            val videoBaseName = videoPath.substringAfterLast('\\').substringBeforeLast('.')
+            val audioExtensions = listOf("mp3", "aac", "ac3", "dts", "flac", "m4a", "wav", "ogg", "opus", "mka")
+
+            share.list(parentPath).filter { fileInfo ->
+                val fileName = fileInfo.fileName
+                val ext = fileName.substringAfterLast('.', "").lowercase()
+                val baseName = fileName.substringBeforeLast('.')
+                audioExtensions.contains(ext) && baseName.startsWith(videoBaseName)
+            }.map { fileInfo ->
+                val fullPath = if (parentPath.isEmpty()) fileInfo.fileName else "$parentPath\\${fileInfo.fileName}"
+                FileModel(
+                    name = fileInfo.fileName,
+                    path = fullPath,
+                    isDirectory = false,
+                    size = fileInfo.endOfFile,
+                    lastModified = fileInfo.changeTime.toEpochMillis(),
+                    mimeType = "audio/*",
                     isSmb = true,
                     smbUrl = "smb://$fullPath"
                 )
