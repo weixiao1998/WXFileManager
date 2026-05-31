@@ -1,17 +1,27 @@
 package dev.weixiao.wxfilemanager.ui.viewer
 
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.media.AudioManager
+import android.media.MediaScannerConnection
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
+import android.provider.MediaStore
 import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.PixelCopy
+import android.view.SurfaceView
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.Toast
@@ -36,6 +46,8 @@ import dev.weixiao.wxfilemanager.model.FileModel
 import dev.weixiao.wxfilemanager.utils.SafManager
 import dev.weixiao.wxfilemanager.utils.SmbManager
 import java.io.File as JFile
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 class VlcVideoPlayerActivity : AppCompatActivity() {
@@ -99,6 +111,9 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     private var currentSpuDelay: Long = 0L
     private var currentAudioDelay: Long = 0L
     private var skipNextResumeReload = false
+
+    private enum class RepeatMode { LIST, ONE, RANDOM }
+    private var repeatMode: RepeatMode = RepeatMode.LIST
 
     private val subtitlePickerLauncher: ActivityResultLauncher<Intent> = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -216,7 +231,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                         }
                         MediaPlayer.Event.EndReached -> {
                             Log.d(TAG, "播放结束")
-                            finish()
+                            handler.post { handleEndReached() }
                         }
                         MediaPlayer.Event.EncounteredError -> {
                             Log.e(TAG, "播放错误")
@@ -397,8 +412,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         }
 
         binding.btnRepeatLandscape.setOnClickListener {
-            // VLC 不支持标准 repeat mode，简单提示即可
-            Toast.makeText(this, "循环播放功能开发中", Toast.LENGTH_SHORT).show()
+            cycleRepeatMode()
         }
 
         binding.btnSubtitleLandscape.setOnClickListener {
@@ -1415,12 +1429,187 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         return if (sec >= 0) "+${String.format("%.1f", sec)}s" else String.format("%.1f", sec) + "s"
     }
 
-    private fun showMenuDialog() {
-        Toast.makeText(this, "菜单功能开发中", Toast.LENGTH_SHORT).show()
+    private fun takeScreenshot() {
+        if (mediaPlayer == null) {
+            Toast.makeText(this, "播放器未就绪", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val surfaceView = findVideoSurfaceView(binding.vlcSurfaceView)
+        if (surfaceView == null || surfaceView.width <= 0 || surfaceView.height <= 0) {
+            Toast.makeText(this, "视频尚未就绪，无法截图", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val bitmap = Bitmap.createBitmap(surfaceView.width, surfaceView.height, Bitmap.Config.ARGB_8888)
+        val copyThread = HandlerThread("ScreenshotPixelCopy").apply { start() }
+        val copyHandler = Handler(copyThread.looper)
+
+        try {
+            PixelCopy.request(surfaceView, bitmap, { result ->
+                copyThread.quitSafely()
+                if (result != PixelCopy.SUCCESS) {
+                    runOnUiThread {
+                        Toast.makeText(this, "截图失败 (code=$result)", Toast.LENGTH_SHORT).show()
+                    }
+                    bitmap.recycle()
+                    return@request
+                }
+                persistScreenshot(bitmap)
+            }, copyHandler)
+        } catch (e: Throwable) {
+            Log.e(TAG, "PixelCopy 调用失败", e)
+            copyThread.quitSafely()
+            bitmap.recycle()
+            Toast.makeText(this, "截图失败", Toast.LENGTH_SHORT).show()
+        }
     }
 
-    private fun takeScreenshot() {
-        Toast.makeText(this, "截图功能开发中", Toast.LENGTH_SHORT).show()
+    private fun findVideoSurfaceView(root: View): SurfaceView? {
+        if (root is SurfaceView) return root
+        if (root is ViewGroup) {
+            for (i in 0 until root.childCount) {
+                val child = root.getChildAt(i)
+                val found = findVideoSurfaceView(child)
+                if (found != null) return found
+            }
+        }
+        return null
+    }
+
+    private fun persistScreenshot(bitmap: Bitmap) {
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val baseName = currentName.substringBeforeLast('.', currentName).ifBlank { "video" }
+        val safeName = baseName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+        val fileName = "${safeName}_$timestamp.png"
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val savedLocation = saveBitmapToGallery(bitmap, fileName)
+            bitmap.recycle()
+            withContext(Dispatchers.Main) {
+                if (savedLocation != null) {
+                    Toast.makeText(
+                        this@VlcVideoPlayerActivity,
+                        "截图已保存：$savedLocation",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    Toast.makeText(this@VlcVideoPlayerActivity, "保存截图失败", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun saveBitmapToGallery(bitmap: Bitmap, displayName: String): String? {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val relativePath = Environment.DIRECTORY_PICTURES + "/WXFileManager/Screenshots"
+                val values = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                    put(MediaStore.Images.Media.RELATIVE_PATH, relativePath)
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                }
+                val resolver = contentResolver
+                val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                    ?: return null
+                resolver.openOutputStream(uri)?.use { out ->
+                    if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) {
+                        return null
+                    }
+                } ?: return null
+                values.clear()
+                values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                resolver.update(uri, values, null, null)
+                "$relativePath/$displayName"
+            } else {
+                @Suppress("DEPRECATION")
+                val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                val targetDir = JFile(picturesDir, "WXFileManager/Screenshots")
+                if (!targetDir.exists() && !targetDir.mkdirs()) return null
+                val destFile = JFile(targetDir, displayName)
+                destFile.outputStream().use { out ->
+                    if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) {
+                        return null
+                    }
+                }
+                MediaScannerConnection.scanFile(
+                    this,
+                    arrayOf(destFile.absolutePath),
+                    arrayOf("image/png"),
+                    null
+                )
+                destFile.absolutePath
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "保存截图到相册失败", e)
+            null
+        }
+    }
+
+    private fun cycleRepeatMode() {
+        repeatMode = when (repeatMode) {
+            RepeatMode.LIST -> RepeatMode.ONE
+            RepeatMode.ONE -> RepeatMode.RANDOM
+            RepeatMode.RANDOM -> RepeatMode.LIST
+        }
+        updateRepeatModeUi()
+        val tip = when (repeatMode) {
+            RepeatMode.LIST -> "列表循环"
+            RepeatMode.ONE -> "单集循环"
+            RepeatMode.RANDOM -> "随机播放"
+        }
+        Toast.makeText(this, tip, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateRepeatModeUi() {
+        val iconRes = when (repeatMode) {
+            RepeatMode.LIST -> R.drawable.ic_repeat_list
+            RepeatMode.ONE -> R.drawable.ic_repeat_one
+            RepeatMode.RANDOM -> R.drawable.ic_repeat_random
+        }
+        binding.btnRepeatLandscape.setImageResource(iconRes)
+    }
+
+    private fun handleEndReached() {
+        when (repeatMode) {
+            RepeatMode.ONE -> {
+                if (currentPath.isNotEmpty()) {
+                    loadVideo(currentPath)
+                } else {
+                    finish()
+                }
+            }
+            RepeatMode.LIST -> {
+                if (videoList.isEmpty()) {
+                    finish()
+                } else {
+                    val next = if (currentEpisodePosition < videoList.size - 1) {
+                        currentEpisodePosition + 1
+                    } else {
+                        0
+                    }
+                    playVideoAt(next)
+                }
+            }
+            RepeatMode.RANDOM -> {
+                if (videoList.isEmpty()) {
+                    finish()
+                } else if (videoList.size == 1) {
+                    loadVideo(currentPath)
+                } else {
+                    var next: Int
+                    do {
+                        next = (0 until videoList.size).random()
+                    } while (next == currentEpisodePosition)
+                    playVideoAt(next)
+                }
+            }
+        }
+    }
+
+    private fun showMenuDialog() {
+        Toast.makeText(this, "菜单功能开发中", Toast.LENGTH_SHORT).show()
     }
     
     override fun onConfigurationChanged(newConfig: Configuration) {
