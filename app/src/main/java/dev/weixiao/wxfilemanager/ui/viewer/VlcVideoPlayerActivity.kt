@@ -87,6 +87,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     private lateinit var audioManager: AudioManager
 
     private val hideGestureHintRunnable = Runnable { hideGestureHint() }
+    private val hideSeekHintRunnable = Runnable { hideSeekHint() }
 
     private val hideControlsRunnable = Runnable { hideControls() }
 
@@ -465,13 +466,15 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
             override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser && mediaPlayer != null && !isUpdatingSeekBar) {
                     if (isTsFile) {
-                        // .ts 文件使用 position (0.0~1.0) 跳转
-                        mediaPlayer?.position = progress / 1000f
+                        val newPos = progress / 1000f
+                        mediaPlayer?.position = newPos
+                        showTsSeekHint(newPos)
                     } else {
                         val duration = mediaPlayer?.length ?: 0L
                         if (duration > 0) {
                             val position = (progress * duration / 1000L).toLong()
                             mediaPlayer?.setTime(position)
+                            showSeekHint(position, duration)
                         }
                     }
                 }
@@ -482,6 +485,8 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
             }
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {
                 isSeeking = false
+                handler.removeCallbacks(hideSeekHintRunnable)
+                handler.postDelayed(hideSeekHintRunnable, 800)
                 scheduleHideControls()
             }
         })
@@ -490,13 +495,15 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
             override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser && mediaPlayer != null && !isUpdatingSeekBar) {
                     if (isTsFile) {
-                        // .ts 文件使用 position (0.0~1.0) 跳转
-                        mediaPlayer?.position = progress / 1000f
+                        val newPos = progress / 1000f
+                        mediaPlayer?.position = newPos
+                        showTsSeekHint(newPos)
                     } else {
                         val duration = mediaPlayer?.length ?: 0L
                         if (duration > 0) {
                             val position = (progress * duration / 1000L).toLong()
                             mediaPlayer?.setTime(position)
+                            showSeekHint(position, duration)
                         }
                     }
                 }
@@ -507,6 +514,8 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
             }
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {
                 isSeeking = false
+                handler.removeCallbacks(hideSeekHintRunnable)
+                handler.postDelayed(hideSeekHintRunnable, 800)
                 scheduleHideControls()
             }
         })
@@ -589,6 +598,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                             binding.seekbarPortrait.progress = progress
                             binding.seekbarLandscape.progress = progress
                             isUpdatingSeekBar = false
+                            showTsSeekHint(newPos, seekPercent)
                         } else {
                             val duration = mediaPlayer?.length ?: 0
                             if (duration > 0) {
@@ -647,6 +657,8 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                             }
                         }
                         isSeeking = false
+                        handler.removeCallbacks(hideSeekHintRunnable)
+                        handler.postDelayed(hideSeekHintRunnable, 800)
                         if (controlsVisible) {
                             scheduleHideControls()
                         }
@@ -986,24 +998,47 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         val player = mediaPlayer ?: return
         val duration = player.length
         
-        // 更新 SeekBar（标记为代码更新，不触发 setTime）
         if (duration > 0) {
             isUpdatingSeekBar = true
             val progress = ((positionMs * 1000) / duration).toInt()
-            binding.seekbarPortrait.progress = progress
-            binding.seekbarLandscape.progress = progress
+            binding.seekbarPortrait.progress = progress.coerceIn(0, 1000)
+            binding.seekbarLandscape.progress = progress.coerceIn(0, 1000)
             isUpdatingSeekBar = false
         }
         
-        // 更新时间显示
         val timeText = formatTime(positionMs)
         binding.tvCurrentTimePortrait.text = timeText
         binding.tvCurrentTimeLandscape.text = timeText
-        
-        // 显示拖动提示（可选）
-        val sign = if (deltaMs >= 0) "+" else ""
-        val timeStr = formatTime(kotlin.math.abs(deltaMs))
-        // 可以在这里添加拖动提示的 UI
+        showSeekHint(positionMs, duration, deltaMs)
+    }
+
+    private fun showSeekHint(positionMs: Long, durationMs: Long, deltaMs: Long? = null) {
+        if (!isLandscape) return
+        handler.removeCallbacks(hideSeekHintRunnable)
+        val deltaText = deltaMs?.let {
+            val sign = if (it >= 0) "+" else "-"
+            "$sign${formatTime(kotlin.math.abs(it))}\n"
+        } ?: ""
+        val durationText = if (durationMs > 0) formatTime(durationMs) else "--:--"
+        binding.tvSeekHintLandscape.text = "$deltaText${formatTime(positionMs)} / $durationText"
+        binding.tvSeekHintLandscape.visibility = View.VISIBLE
+    }
+
+    private fun showTsSeekHint(position: Float, delta: Float? = null) {
+        if (!isLandscape) return
+        handler.removeCallbacks(hideSeekHintRunnable)
+        val percent = (position * 100).toInt().coerceIn(0, 100)
+        val deltaText = delta?.let {
+            val sign = if (it >= 0f) "+" else "-"
+            val deltaPercent = (kotlin.math.abs(it) * 100).toInt()
+            "$sign$deltaPercent%\n"
+        } ?: ""
+        binding.tvSeekHintLandscape.text = "$deltaText$percent%"
+        binding.tvSeekHintLandscape.visibility = View.VISIBLE
+    }
+
+    private fun hideSeekHint() {
+        binding.tvSeekHintLandscape.visibility = View.GONE
     }
     
     private fun showSpeedHint(show: Boolean) {
@@ -1073,6 +1108,8 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
 
         // 先移除所有回调，防止重复调用
         handler.removeCallbacks(hideControlsRunnable)
+        handler.removeCallbacks(hideSeekHintRunnable)
+        hideSeekHint()
 
         // 隐藏所有控制层
         binding.topBarPortrait.visibility = View.GONE
@@ -1768,6 +1805,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     private fun releaseAllResources() {
         stopProgressUpdate()
         handler.removeCallbacks(hideGestureHintRunnable)
+        handler.removeCallbacks(hideSeekHintRunnable)
         handler.removeCallbacks(hideControlsRunnable)
         try {
             mediaPlayer?.stop()
