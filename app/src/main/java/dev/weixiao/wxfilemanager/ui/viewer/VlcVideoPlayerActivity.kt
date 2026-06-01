@@ -113,7 +113,16 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     private var skipNextResumeReload = false
 
     private enum class RepeatMode { LIST, ONE, RANDOM }
+    private enum class VideoScaleMode(val label: String) {
+        BEST_FIT("适应屏幕"),
+        FILL("填充屏幕"),
+        SIXTEEN_NINE("16:9"),
+        FOUR_THREE("4:3"),
+        ORIGINAL("原始比例")
+    }
+
     private var repeatMode: RepeatMode = RepeatMode.LIST
+    private var videoScaleMode: VideoScaleMode = VideoScaleMode.BEST_FIT
 
     private val subtitlePickerLauncher: ActivityResultLauncher<Intent> = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -219,6 +228,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                                     }, 150)
                                 }
                             }
+                            applyVideoScaleMode()
                             startProgressUpdate()
                         }
                         MediaPlayer.Event.Paused -> {
@@ -1609,7 +1619,110 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     }
 
     private fun showMenuDialog() {
-        Toast.makeText(this, "菜单功能开发中", Toast.LENGTH_SHORT).show()
+        val items = arrayOf(
+            "画面比例：${videoScaleMode.label}",
+            "视频信息"
+        )
+        android.app.AlertDialog.Builder(this)
+            .setTitle("播放菜单")
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> showVideoScaleDialog()
+                    1 -> showVideoInfoDialog()
+                }
+            }
+            .show()
+    }
+
+    private fun showVideoScaleDialog() {
+        val modes = VideoScaleMode.entries.toTypedArray()
+        val labels = modes.map { it.label }.toTypedArray()
+        val checked = modes.indexOf(videoScaleMode)
+        android.app.AlertDialog.Builder(this)
+            .setTitle("画面比例")
+            .setSingleChoiceItems(labels, checked) { dialog, which ->
+                videoScaleMode = modes[which]
+                applyVideoScaleMode()
+                Toast.makeText(this, "已切换为：${videoScaleMode.label}", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    private fun applyVideoScaleMode() {
+        val player = mediaPlayer ?: return
+        val surfaceWidth = binding.vlcSurfaceView.width
+        val surfaceHeight = binding.vlcSurfaceView.height
+        when (videoScaleMode) {
+            VideoScaleMode.BEST_FIT -> {
+                player.aspectRatio = null
+                player.scale = 0f
+            }
+            VideoScaleMode.FILL -> {
+                player.aspectRatio = if (surfaceWidth > 0 && surfaceHeight > 0) {
+                    "$surfaceWidth:$surfaceHeight"
+                } else {
+                    null
+                }
+                player.scale = 0f
+            }
+            VideoScaleMode.SIXTEEN_NINE -> {
+                player.aspectRatio = "16:9"
+                player.scale = 0f
+            }
+            VideoScaleMode.FOUR_THREE -> {
+                player.aspectRatio = "4:3"
+                player.scale = 0f
+            }
+            VideoScaleMode.ORIGINAL -> {
+                player.aspectRatio = null
+                player.scale = 1f
+            }
+        }
+    }
+
+    private fun showVideoInfoDialog() {
+        val player = mediaPlayer
+        val duration = player?.length ?: 0L
+        val currentTime = player?.time ?: 0L
+        val videoTrack = try {
+            player?.currentVideoTrack
+        } catch (e: Exception) {
+            null
+        }
+        val resolution = if (videoTrack != null && videoTrack.width > 0 && videoTrack.height > 0) {
+            "${videoTrack.width} x ${videoTrack.height}"
+        } else {
+            "未知"
+        }
+        val progress = if (duration > 0) {
+            "${formatTime(currentTime)} / ${formatTime(duration)}"
+        } else {
+            "${formatTime(currentTime)} / --:--"
+        }
+        val sourceType = if (isSmbFile) "SMB 网络文件" else "本地文件"
+        val repeatText = when (repeatMode) {
+            RepeatMode.LIST -> "列表循环"
+            RepeatMode.ONE -> "单集循环"
+            RepeatMode.RANDOM -> "随机播放"
+        }
+        val info = buildString {
+            appendLine("文件名：$currentName")
+            appendLine("来源：$sourceType")
+            appendLine("分辨率：$resolution")
+            appendLine("播放进度：$progress")
+            appendLine("播放速度：${String.format(Locale.getDefault(), "%.2fx", player?.rate ?: 1.0f)}")
+            appendLine("画面比例：${videoScaleMode.label}")
+            appendLine("循环模式：$repeatText")
+            appendLine("字幕延迟：${formatSubtitleDelay(currentSpuDelay)}")
+            appendLine("音频延迟：${formatAudioDelay(currentAudioDelay)}")
+            appendLine("路径：$currentPath")
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("视频信息")
+            .setMessage(info)
+            .setPositiveButton("确定", null)
+            .show()
     }
     
     override fun onConfigurationChanged(newConfig: Configuration) {
