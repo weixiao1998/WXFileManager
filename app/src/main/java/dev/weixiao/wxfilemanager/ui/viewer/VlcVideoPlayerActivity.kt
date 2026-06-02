@@ -1,10 +1,15 @@
 package dev.weixiao.wxfilemanager.ui.viewer
 
+import android.content.BroadcastReceiver
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaScannerConnection
 import android.net.Uri
@@ -85,6 +90,13 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     private var maxVolume: Int = 0
     private var initialBrightness: Float = 0f
     private lateinit var audioManager: AudioManager
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private var hasAudioFocus = false
+    private var resumeAfterAudioFocusGain = false
+    private var wasPlayingBeforeNoisy = false
+    private var isNoisyReceiverRegistered = false
+    private var isDuckingVolume = false
+    private var volumeBeforeDuck = 100
 
     private val hideGestureHintRunnable = Runnable { hideGestureHint() }
     private val hideSeekHintRunnable = Runnable { hideSeekHint() }
@@ -108,6 +120,50 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
             isFastForwarding = true
             showSpeedHint(true)
             shouldIgnoreTap = true
+        }
+    }
+
+    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                resumeAfterAudioFocusGain = false
+                pauseForAudioInterrupt()
+                abandonAudioFocus()
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                resumeAfterAudioFocusGain = mediaPlayer?.isPlaying == true
+                pauseForAudioInterrupt()
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                duckPlayerVolume()
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                restorePlayerVolumeAfterDuck()
+                hasAudioFocus = true
+                if (resumeAfterAudioFocusGain) {
+                    resumeAfterAudioFocusGain = false
+                    mediaPlayer?.play()
+                    updatePlayPauseButton(true)
+                    startProgressUpdate()
+                }
+            }
+        }
+    }
+
+    private val noisyAudioReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                wasPlayingBeforeNoisy = mediaPlayer?.isPlaying == true
+                if (wasPlayingBeforeNoisy) {
+                    restorePlayerVolumeAfterDuck()
+                    mediaPlayer?.pause()
+                    updatePlayPauseButton(false)
+                    stopProgressUpdate()
+                    unregisterNoisyAudioReceiver()
+                    abandonAudioFocus()
+                    Toast.makeText(this@VlcVideoPlayerActivity, "音频设备断开，已暂停播放", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -771,6 +827,93 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         }
     }
     
+    private fun requestAudioFocus(): Boolean {
+        if (hasAudioFocus) return true
+        val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = audioFocusRequest ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+                        .build()
+                )
+                .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                .build()
+                .also { audioFocusRequest = it }
+            audioManager.requestAudioFocus(request)
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                audioFocusChangeListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+        }
+        hasAudioFocus = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        return hasAudioFocus
+    }
+
+    private fun abandonAudioFocus() {
+        if (!hasAudioFocus) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(audioFocusChangeListener)
+        }
+        hasAudioFocus = false
+    }
+
+    private fun pauseForAudioInterrupt() {
+        restorePlayerVolumeAfterDuck()
+        if (mediaPlayer?.isPlaying == true) {
+            mediaPlayer?.pause()
+            updatePlayPauseButton(false)
+            stopProgressUpdate()
+        }
+    }
+
+    private fun duckPlayerVolume() {
+        val player = mediaPlayer ?: return
+        if (!isDuckingVolume) {
+            volumeBeforeDuck = player.volume.coerceAtLeast(0)
+            isDuckingVolume = true
+        }
+        val duckVolume = if (volumeBeforeDuck <= 0) {
+            0
+        } else {
+            (volumeBeforeDuck * 0.3f).toInt().coerceIn(1, volumeBeforeDuck)
+        }
+        player.volume = duckVolume
+    }
+
+    private fun restorePlayerVolumeAfterDuck() {
+        if (!isDuckingVolume) return
+        mediaPlayer?.volume = volumeBeforeDuck.coerceAtLeast(0)
+        isDuckingVolume = false
+    }
+
+    private fun registerNoisyAudioReceiver() {
+        if (isNoisyReceiverRegistered) return
+        val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(noisyAudioReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(noisyAudioReceiver, filter)
+        }
+        isNoisyReceiverRegistered = true
+    }
+
+    private fun unregisterNoisyAudioReceiver() {
+        if (!isNoisyReceiverRegistered) return
+        try {
+            unregisterReceiver(noisyAudioReceiver)
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "音频断开监听未注册或已注销", e)
+        }
+        isNoisyReceiverRegistered = false
+    }
+
     private fun loadVideo(path: String) {
         isTsFile = path.endsWith(".ts", ignoreCase = true)
         
@@ -825,7 +968,12 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                         
                         player.media = media
                         media.release()
-                        player.play()
+                        if (requestAudioFocus()) {
+                            registerNoisyAudioReceiver()
+                            player.play()
+                        } else {
+                            Toast.makeText(this@VlcVideoPlayerActivity, "无法获取音频焦点", Toast.LENGTH_SHORT).show()
+                        }
                         
                     } catch (e: Exception) {
                         Log.e(TAG, "加载视频失败", e)
@@ -847,10 +995,17 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         if (player.isPlaying) {
             player.pause()
             updatePlayPauseButton(false)
-        } else {
+            stopProgressUpdate()
+            unregisterNoisyAudioReceiver()
+            restorePlayerVolumeAfterDuck()
+            abandonAudioFocus()
+        } else if (requestAudioFocus()) {
+            registerNoisyAudioReceiver()
             player.play()
             updatePlayPauseButton(true)
             startProgressUpdate()
+        } else {
+            Toast.makeText(this, "无法获取音频焦点", Toast.LENGTH_SHORT).show()
         }
     }
     
@@ -1862,6 +2017,9 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         handler.removeCallbacks(hideControlsRunnable)
         isPlaylistPanelVisible = false
         binding.playlistPanelLandscape.visibility = View.GONE
+        unregisterNoisyAudioReceiver()
+        restorePlayerVolumeAfterDuck()
+        abandonAudioFocus()
         try {
             mediaPlayer?.stop()
             mediaPlayer?.release()
