@@ -94,6 +94,8 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     private var videoList: List<FileModel> = emptyList()
     private var currentEpisodePosition = 0
     private lateinit var episodeAdapter: VideoEpisodeAdapter
+    private lateinit var landscapeEpisodeAdapter: VideoEpisodeAdapter
+    private var isPlaylistPanelVisible = false
     
     // 标记当前是否为 .ts 文件（若 duration 为 0 则使用 position 进度）
     private var isTsFile = false
@@ -277,11 +279,17 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     }
 
     private fun setupEpisodeList() {
-        episodeAdapter = VideoEpisodeAdapter { file, position ->
+        episodeAdapter = VideoEpisodeAdapter { _, position ->
             playVideoAt(position)
+        }
+        landscapeEpisodeAdapter = VideoEpisodeAdapter { _, position ->
+            playVideoAt(position)
+            hidePlaylistPanel()
         }
         binding.rvEpisodes.layoutManager = LinearLayoutManager(this)
         binding.rvEpisodes.adapter = episodeAdapter
+        binding.rvEpisodesLandscape.layoutManager = LinearLayoutManager(this)
+        binding.rvEpisodesLandscape.adapter = landscapeEpisodeAdapter
     }
 
     private fun loadVideoList(currentPath: String, isSmb: Boolean) {
@@ -320,13 +328,21 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     if (currentEpisodePosition >= 0) {
                         episodeAdapter.setCurrentPlaying(currentEpisodePosition)
+                        landscapeEpisodeAdapter.setCurrentPlaying(currentEpisodePosition)
                     }
                     episodeAdapter.submitList(videoList) {
                         if (currentEpisodePosition >= 0) {
                             binding.rvEpisodes.scrollToPosition(currentEpisodePosition)
                         }
                     }
-                    binding.tvEpisodeTitle.text = "选集 (共${videoList.size}个)"
+                    landscapeEpisodeAdapter.submitList(videoList) {
+                        if (currentEpisodePosition >= 0) {
+                            binding.rvEpisodesLandscape.scrollToPosition(currentEpisodePosition)
+                        }
+                    }
+                    val title = "选集 (共${videoList.size}个)"
+                    binding.tvEpisodeTitle.text = title
+                    binding.tvPlaylistTitleLandscape.text = title
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -344,6 +360,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         currentSpuDelay = 0L
 
         episodeAdapter.setCurrentPlaying(position)
+        landscapeEpisodeAdapter.setCurrentPlaying(position)
 
         binding.tvTitlePortrait.text = file.name
         binding.tvTitleLandscape.text = file.name
@@ -419,8 +436,14 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         }
 
         binding.btnPlaylistLandscape.setOnClickListener {
-            toggleOrientation()
+            togglePlaylistPanel()
         }
+
+        binding.btnClosePlaylistLandscape.setOnClickListener {
+            hidePlaylistPanel()
+        }
+
+        binding.playlistPanelLandscape.setOnClickListener { }
 
         binding.btnRepeatLandscape.setOnClickListener {
             cycleRepeatMode()
@@ -737,6 +760,8 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
 
             binding.videoOverlayPortrait.visibility = View.VISIBLE
             binding.portraitInfoContainer.visibility = View.VISIBLE
+            isPlaylistPanelVisible = false
+            binding.playlistPanelLandscape.visibility = View.GONE
             binding.landscapeContainer.visibility = View.GONE
 
             val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
@@ -974,6 +999,32 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         handler.postDelayed(hideControlsRunnable, 5000)
     }
 
+    private fun togglePlaylistPanel() {
+        if (isPlaylistPanelVisible) {
+            hidePlaylistPanel()
+        } else {
+            showPlaylistPanel()
+        }
+    }
+
+    private fun showPlaylistPanel() {
+        if (!isLandscape || isControlsLocked) return
+        isPlaylistPanelVisible = true
+        handler.removeCallbacks(hideControlsRunnable)
+        binding.playlistPanelLandscape.visibility = View.VISIBLE
+        if (currentEpisodePosition >= 0 && videoList.isNotEmpty()) {
+            binding.rvEpisodesLandscape.scrollToPosition(currentEpisodePosition)
+        }
+    }
+
+    private fun hidePlaylistPanel() {
+        isPlaylistPanelVisible = false
+        binding.playlistPanelLandscape.visibility = View.GONE
+        if (controlsVisible) {
+            scheduleHideControls()
+        }
+    }
+
     private fun showControlsForSeek() {
         if (isControlsLocked) return
         controlsVisible = true
@@ -1110,6 +1161,8 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         handler.removeCallbacks(hideControlsRunnable)
         handler.removeCallbacks(hideSeekHintRunnable)
         hideSeekHint()
+        isPlaylistPanelVisible = false
+        binding.playlistPanelLandscape.visibility = View.GONE
 
         // 隐藏所有控制层
         binding.topBarPortrait.visibility = View.GONE
@@ -1807,6 +1860,8 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         handler.removeCallbacks(hideGestureHintRunnable)
         handler.removeCallbacks(hideSeekHintRunnable)
         handler.removeCallbacks(hideControlsRunnable)
+        isPlaylistPanelVisible = false
+        binding.playlistPanelLandscape.visibility = View.GONE
         try {
             mediaPlayer?.stop()
             mediaPlayer?.release()
@@ -1826,6 +1881,10 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
+        if (isPlaylistPanelVisible) {
+            hidePlaylistPanel()
+            return
+        }
         releaseAllResources()
         super.onBackPressed()
     }

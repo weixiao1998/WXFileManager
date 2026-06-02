@@ -1,4 +1,4 @@
-﻿package dev.weixiao.wxfilemanager.adapter
+package dev.weixiao.wxfilemanager.adapter
 
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
@@ -154,8 +154,12 @@ class VideoEpisodeAdapter(
     fun setCurrentPlaying(position: Int) {
         val oldPosition = currentPlayingPosition
         currentPlayingPosition = position
-        notifyItemChanged(oldPosition)
-        notifyItemChanged(position)
+        if (oldPosition >= 0) {
+            notifyItemChanged(oldPosition)
+        }
+        if (position >= 0) {
+            notifyItemChanged(position)
+        }
     }
 
     class DiffCallback : DiffUtil.ItemCallback<FileModel>() {
