@@ -81,6 +81,9 @@ dependencies {
     // Charset Detection
     implementation(libs.juniversalchardet)
 
+    // Encrypted Storage
+    implementation(libs.androidx.security.crypto)
+
     // Syntax Highlighting
     implementation(libs.prism4j) {
         exclude(group = "org.jetbrains", module = "annotations-java5")

@@ -1,7 +1,8 @@
-﻿package dev.weixiao.wxfilemanager.viewmodel
+package dev.weixiao.wxfilemanager.viewmodel
 
 import android.app.Application
 import android.content.Context
+import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -11,12 +12,38 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.launch
 import dev.weixiao.wxfilemanager.model.FileModel
 import dev.weixiao.wxfilemanager.model.SmbServer
+import dev.weixiao.wxfilemanager.utils.SecurePrefs
 import dev.weixiao.wxfilemanager.utils.SmbManager
 
 class SmbViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val prefs = application.getSharedPreferences("smb_servers", Context.MODE_PRIVATE)
+    private val prefs = SecurePrefs.get(application)
     private val gson = Gson()
+
+    init {
+        migrateLegacyPlainPrefs(application)
+    }
+
+    /**
+     * 旧版本将 SMB 密码以明文形式存放在 "smb_servers" 这一普通 SharedPreferences 中，
+     * 迁移到加密存储后需要把旧数据搬过来并清空原文件。
+     */
+    private fun migrateLegacyPlainPrefs(context: Context) {
+        val legacy = context.getSharedPreferences("smb_servers", Context.MODE_PRIVATE)
+        if (legacy.all.isEmpty()) return
+        prefs.edit {
+            legacy.all.forEach { (key, value) ->
+                when (value) {
+                    is String -> putString(key, value)
+                    is Int -> putInt(key, value)
+                    is Long -> putLong(key, value)
+                    is Float -> putFloat(key, value)
+                    is Boolean -> putBoolean(key, value)
+                }
+            }
+        }
+        legacy.edit { clear() }
+    }
 
     enum class ViewState {
         SERVERS, SHARES, FILES

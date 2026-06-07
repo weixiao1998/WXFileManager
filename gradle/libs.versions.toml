@@ -19,6 +19,7 @@ swiperefreshlayout = "1.1.0"
 documentfile = "1.0.1"
 juniversalchardet = "2.5.0"
 prism4j = "2.0.0"
+securityCrypto = "1.1.0-alpha06"
 
 [libraries]
 androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
@@ -45,6 +46,7 @@ swiperefreshlayout = { group = "androidx.swiperefreshlayout", name = "swiperefre
 juniversalchardet = { group = "com.github.albfernandez", name = "juniversalchardet", version.ref = "juniversalchardet" }
 prism4j = { group = "io.noties", name = "prism4j", version.ref = "prism4j" }
 prism4j-bundler = { group = "io.noties", name = "prism4j-bundler", version.ref = "prism4j" }
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
