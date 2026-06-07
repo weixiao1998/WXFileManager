@@ -1,5 +1,6 @@
 package dev.weixiao.wxfilemanager.utils
 
+import android.util.Log
 import android.webkit.MimeTypeMap
 import com.hierynomus.msdtyp.AccessMask
 import com.hierynomus.mssmb2.SMB2CreateDisposition
@@ -11,46 +12,52 @@ import com.hierynomus.smbj.connection.Connection
 import com.hierynomus.smbj.session.Session
 import com.hierynomus.smbj.share.DiskShare
 import com.hierynomus.smbj.share.File
-import com.hierynomus.smbj.share.PipeShare
 import com.rapid7.client.dcerpc.mssrvs.ServerService
 import com.rapid7.client.dcerpc.mssrvs.dto.NetShareInfo0
 import com.rapid7.client.dcerpc.transport.SMBTransportFactories
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import dev.weixiao.wxfilemanager.model.FileModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.util.EnumSet
 
 object SmbManager {
+    private const val TAG = "SmbManager"
+
     private val client = SMBClient()
     private var connection: Connection? = null
     private var session: Session? = null
     private var diskShare: DiskShare? = null
-    
+
     private var lastHost: String? = null
     private var lastUser: String? = null
     private var lastPass: String? = null
     private var lastShare: String? = null
-    
+
     private var lastConnectionTime: Long = 0
     private val connectionTimeout: Long = 60_000L
-    private val reconnectLock = Any()
-    
+
+    /** 协程协作锁，替代原先的 synchronized 监视器，便于在加锁区内 delay。*/
+    private val reconnectMutex = Mutex()
+
     private val directoryCache = mutableMapOf<String, CacheEntry>()
     private val cacheLock = Any()
     private val cacheExpiryTime: Long = 30_000L
-    
+
     data class CacheEntry(
         val files: List<FileModel>,
         val timestamp: Long
     )
-    
+
     fun clearCache() {
         synchronized(cacheLock) {
             directoryCache.clear()
         }
     }
-    
+
     private fun getCacheKey(path: String): String {
         val share = lastShare ?: ""
         return "$share:$path"
@@ -62,36 +69,43 @@ object SmbManager {
         }
     }
 
+    /**
+     * 轻量状态检查（无 IO 探测）。原先会在超时后用 list("") 主动探测，
+     * 但该调用阻塞且可能挂起，已移至挂起函数 [probeConnection] 中处理。
+     */
     fun isConnected(): Boolean {
-        synchronized(reconnectLock) {
-            if (connection?.isConnected != true || session == null) {
-                return false
-            }
-            
-            if (System.currentTimeMillis() - lastConnectionTime > connectionTimeout) {
-                return try {
-                    diskShare?.list("") != null
-                } catch (e: Exception) {
-                    false
-                }
-            }
-            return true
+        if (connection?.isConnected != true || session == null) return false
+        return true
+    }
+
+    /**
+     * 在 IO 线程上主动探测一次共享是否可读，用于判断连接是否仍有效。
+     */
+    private suspend fun probeConnection(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            diskShare?.list("") != null
+        } catch (e: Exception) {
+            false
         }
     }
-    
-    fun checkAndReconnect(): Boolean {
-        if (isConnected()) return true
-        return tryReconnectSync()
+
+    suspend fun checkAndReconnect(): Boolean {
+        if (isConnected()) {
+            if (System.currentTimeMillis() - lastConnectionTime <= connectionTimeout) return true
+            if (probeConnection()) {
+                lastConnectionTime = System.currentTimeMillis()
+                return true
+            }
+        }
+        return tryReconnect()
     }
 
     fun getConnectionInfo(): ConnectionInfo? {
-        synchronized(reconnectLock) {
-            val host = lastHost ?: return null
-            val user = lastUser ?: return null
-            val pass = lastPass ?: return null
-            val share = lastShare ?: return null
-            return ConnectionInfo(host, user, pass, share)
-        }
+        val host = lastHost ?: return null
+        val user = lastUser ?: return null
+        val pass = lastPass ?: return null
+        val share = lastShare ?: return null
+        return ConnectionInfo(host, user, pass, share)
     }
 
     data class ConnectionInfo(
@@ -100,43 +114,39 @@ object SmbManager {
         val pass: String,
         val share: String
     )
-    
-    private fun tryReconnectSync(): Boolean {
-        synchronized(reconnectLock) {
-            val host = lastHost ?: return false
-            val user = lastUser ?: return false
-            val pass = lastPass ?: return false
-            val share = lastShare
-            
-            repeat(3) { attempt ->
-                try {
-                    disconnectInternal()
-                    
+
+    private suspend fun tryReconnect(): Boolean = reconnectMutex.withLock {
+        val host = lastHost ?: return@withLock false
+        val user = lastUser ?: return@withLock false
+        val pass = lastPass ?: return@withLock false
+        val share = lastShare
+
+        repeat(3) { attempt ->
+            try {
+                disconnectInternal()
+
+                withContext(Dispatchers.IO) {
                     connection = client.connect(host)
                     val auth = AuthenticationContext(user, pass.toCharArray(), "")
                     session = connection?.authenticate(auth)
-                    
+
                     if (share != null) {
                         diskShare = session?.connectShare(share) as? DiskShare
                     }
-                    
-                    if (diskShare != null || share == null) {
-                        lastConnectionTime = System.currentTimeMillis()
-                        return true
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
                 }
-                
-                try {
-                    Thread.sleep(500L * (attempt + 1))
-                } catch (e: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    return false
+
+                if (diskShare != null || share == null) {
+                    lastConnectionTime = System.currentTimeMillis()
+                    return@withLock true
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "reconnect attempt #${attempt + 1} failed", e)
             }
-            return false
+
+            // 使用协作式 delay，避免阻塞 Dispatcher 线程
+            delay(500L * (attempt + 1))
         }
+        false
     }
 
     suspend fun connect(host: String, user: String, pass: String, share: String? = null): Boolean = withContext(Dispatchers.IO) {
@@ -168,31 +178,31 @@ object SmbManager {
                 }
             } else {
                 lastConnectionTime = System.currentTimeMillis()
-                true 
+                true
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "connect failed", e)
             false
         }
     }
 
     private suspend fun ensureConnected(): Boolean {
         if (isConnected()) return true
-        
+
         val host = lastHost ?: return false
         val user = lastUser ?: return false
         val pass = lastPass ?: return false
         val share = lastShare
-        
+
         repeat(3) { attempt ->
             try {
                 disconnect()
                 val result = connect(host, user, pass, share)
                 if (result) return true
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w(TAG, "ensureConnected attempt #${attempt + 1} failed", e)
             }
-            Thread.sleep(500L * (attempt + 1))
+            delay(500L * (attempt + 1))
         }
         return false
     }
@@ -204,7 +214,7 @@ object SmbManager {
             val transport = SMBTransportFactories.SRVSVC.getTransport(currentSession)
             val serverService = ServerService(transport)
             val shares: List<NetShareInfo0> = serverService.shares0
-            
+
             // Filter out administrative shares and test access
             shares.map { it.netName }
                 .filter { !it.endsWith("$") }
@@ -213,7 +223,7 @@ object SmbManager {
                     try {
                         val testShare = currentSession.connectShare(shareName) as? DiskShare
                         if (testShare == null) return@filter false
-                        
+
                         // Try to list the root directory to verify read access
                         try {
                             testShare.list("")
@@ -228,7 +238,7 @@ object SmbManager {
                     }
                 }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "listShares failed", e)
             emptyList()
         }
     }
@@ -240,9 +250,9 @@ object SmbManager {
             diskShare?.close()
             diskShare = currentSession.connectShare(share) as? DiskShare
             lastShare = share
-            
+
             clearCache()
-            
+
             if (diskShare != null) {
                 lastConnectionTime = System.currentTimeMillis()
                 true
@@ -250,14 +260,14 @@ object SmbManager {
                 false
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "connectShare failed", e)
             false
         }
     }
 
     suspend fun listFiles(path: String, useCache: Boolean = true): List<FileModel> = withContext(Dispatchers.IO) {
         val cacheKey = getCacheKey(path)
-        
+
         if (useCache) {
             synchronized(cacheLock) {
                 val cached = directoryCache[cacheKey]
@@ -266,11 +276,11 @@ object SmbManager {
                 }
             }
         }
-        
+
         if (!ensureConnected()) return@withContext emptyList()
-        
+
         var share = diskShare ?: return@withContext emptyList()
-        
+
         try {
             val fileList = try {
                 share.list(path)
@@ -289,7 +299,7 @@ object SmbManager {
                     val fullPath = if (path.isEmpty()) fileInfo.fileName else "$path\\${fileInfo.fileName}"
                     val extension = fileInfo.fileName.substringAfterLast('.', "").lowercase()
                     val mimeType = if (isDirectory) null else MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
-                    
+
                     FileModel(
                         name = fileInfo.fileName,
                         path = fullPath,
@@ -302,14 +312,14 @@ object SmbManager {
                     )
                 }
                 .sortedWith(compareByDescending<FileModel> { it.isDirectory }.thenBy { it.name.lowercase() })
-            
+
             synchronized(cacheLock) {
                 directoryCache[cacheKey] = CacheEntry(result, System.currentTimeMillis())
             }
-            
+
             result
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "listFiles failed for $path", e)
             emptyList()
         }
     }
@@ -318,7 +328,7 @@ object SmbManager {
         if (!ensureConnected()) return@withContext emptyList()
         val results = mutableListOf<FileModel>()
         val share = diskShare ?: return@withContext emptyList()
-        
+
         fun doSearch(currentPath: String) {
             try {
                 val list = share.list(currentPath).filter { it.fileName != "." && it.fileName != ".." }
@@ -326,7 +336,7 @@ object SmbManager {
                     val isDirectory = fileInfo.fileAttributes.and(0x10L) != 0L
                     val fileName = fileInfo.fileName
                     val fullPath = if (currentPath.isEmpty()) fileName else "$currentPath\\$fileName"
-                    
+
                     if (fileName.contains(query, ignoreCase = true)) {
                         val extension = fileName.substringAfterLast('.', "").lowercase()
                         val mimeType = if (isDirectory) null else MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
@@ -341,7 +351,7 @@ object SmbManager {
                             smbUrl = "smb://$fullPath"
                         ))
                     }
-                    
+
                     if (isDirectory) {
                         doSearch(fullPath)
                     }
@@ -350,7 +360,7 @@ object SmbManager {
                 // Skip restricted directories
             }
         }
-        
+
         doSearch(path)
         results
     }
@@ -361,7 +371,7 @@ object SmbManager {
             val file = openFile(path) ?: return@withContext null
             file.inputStream
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "getInputStream failed for $path", e)
             null
         }
     }
@@ -373,7 +383,7 @@ object SmbManager {
             val parentPath = videoPath.substringBeforeLast('\\', "")
             val videoBaseName = videoPath.substringAfterLast('\\').substringBeforeLast('.')
             val subtitleExtensions = listOf("srt", "vtt", "ass", "ssa")
-            
+
             share.list(parentPath).filter { fileInfo ->
                 val fileName = fileInfo.fileName
                 val ext = fileName.substringAfterLast('.', "").lowercase()
@@ -387,13 +397,13 @@ object SmbManager {
                     isDirectory = false,
                     size = fileInfo.endOfFile,
                     lastModified = fileInfo.changeTime.toEpochMillis(),
-                    mimeType = "application/x-subrip", // Default, will be handled by Media3
+                    mimeType = "application/x-subrip",
                     isSmb = true,
                     smbUrl = "smb://$fullPath"
                 )
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "findSubtitles failed", e)
             emptyList()
         }
     }
@@ -425,58 +435,49 @@ object SmbManager {
                 )
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "findAudioTracks failed", e)
             emptyList()
         }
     }
 
     fun openFile(path: String): File? {
-        synchronized(reconnectLock) {
-            val share = diskShare ?: return null
-            
-            return try {
-                share.openFile(
-                    path,
-                    EnumSet.of(AccessMask.GENERIC_READ),
-                    null,
-                    EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ),
-                    SMB2CreateDisposition.FILE_OPEN,
-                    EnumSet.of(SMB2CreateOptions.FILE_NON_DIRECTORY_FILE, SMB2CreateOptions.FILE_RANDOM_ACCESS)
-                )
-            } catch (e: Exception) {
-                e.printStackTrace()
-                null
-            }
+        val share = diskShare ?: return null
+        return try {
+            share.openFile(
+                path,
+                EnumSet.of(AccessMask.GENERIC_READ),
+                null,
+                EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ),
+                SMB2CreateDisposition.FILE_OPEN,
+                EnumSet.of(SMB2CreateOptions.FILE_NON_DIRECTORY_FILE, SMB2CreateOptions.FILE_RANDOM_ACCESS)
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "openFile failed for $path", e)
+            null
         }
     }
 
-    fun getDiskShare(): DiskShare? {
-        synchronized(reconnectLock) {
-            return diskShare
-        }
-    }
+    fun getDiskShare(): DiskShare? = diskShare
 
     fun disconnect() {
-        synchronized(reconnectLock) {
-            disconnectInternal()
-        }
+        disconnectInternal()
     }
-    
+
     private fun disconnectInternal() {
         try {
             diskShare?.close()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "close diskShare failed", e)
         }
         try {
             session?.close()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "close session failed", e)
         }
         try {
             connection?.close()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "close connection failed", e)
         }
         diskShare = null
         session = null
