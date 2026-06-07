@@ -30,9 +30,6 @@ class ImageViewerActivity : AppCompatActivity() {
         // 避免系统栏显示/隐藏时根视图被重新布局导致图片位置抖动
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        window.statusBarColor = android.graphics.Color.TRANSPARENT
-        window.navigationBarColor = android.graphics.Color.TRANSPARENT
-
         binding = ActivityImageViewerBinding.inflate(layoutInflater)
         setContentView(binding.root)
 

@@ -158,7 +158,8 @@ class TextViewerActivity : AppCompatActivity() {
     }
 
     private fun changeFontSize(delta: Float) {
-        val current = binding.tvContent.textSize / resources.displayMetrics.scaledDensity
+        val scaledDensity = resources.displayMetrics.density * resources.configuration.fontScale
+        val current = binding.tvContent.textSize / scaledDensity
         val next = (current + delta).coerceIn(FONT_MIN, FONT_MAX)
         binding.tvContent.textSize = next
     }

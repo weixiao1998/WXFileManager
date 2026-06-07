@@ -1,13 +1,16 @@
-package dev.weixiao.wxfilemanager.utils
+package dev.weixiao.wxfilemanager.utils;
 
-import io.noties.prism4j.annotations.PrismBundle
+import io.noties.prism4j.annotations.PrismBundle;
 
 @PrismBundle(
-    include = [
+    include = {
         "clike", "c", "cpp", "csharp", "java", "kotlin", "javascript",
         "json", "markup", "css", "python", "sql", "yaml", "markdown",
         "go"
-    ],
+    },
     grammarLocatorClassName = ".PrismGrammarLocator"
 )
-internal class PrismBundleAnchor
+final class PrismBundleAnchor {
+    private PrismBundleAnchor() {
+    }
+}

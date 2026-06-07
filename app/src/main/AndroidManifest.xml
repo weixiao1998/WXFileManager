@@ -28,12 +28,14 @@
 
         <activity 
             android:name=".ui.viewer.ImageViewerActivity"
-            android:configChanges="orientation|screenSize|screenLayout|layoutDirection" />
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
+            android:theme="@style/Theme.WXFileManager.ImageViewer" />
         <activity 
             android:name=".ui.viewer.VlcVideoPlayerActivity"
             android:configChanges="orientation|screenSize|screenLayout|layoutDirection"
             android:screenOrientation="sensor"
-            android:exported="true" />
+            android:exported="true"
+            android:theme="@style/Theme.WXFileManager.VideoPlayer" />
         <activity 
             android:name=".ui.viewer.SearchActivity"
             android:theme="@style/Theme.WXFileManager.NoActionBar" />

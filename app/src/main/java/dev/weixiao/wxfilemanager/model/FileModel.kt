@@ -1,9 +1,8 @@
 package dev.weixiao.wxfilemanager.model
 
+import android.os.Parcel
 import android.os.Parcelable
-import kotlinx.parcelize.Parcelize
 
-@Parcelize
 data class FileModel(
     val name: String,
     val path: String,
@@ -15,6 +14,31 @@ data class FileModel(
     val smbUrl: String? = null,
     val itemType: ItemType = ItemType.FILE
 ) : Parcelable {
+    constructor(parcel: Parcel) : this(
+        name = parcel.readString().orEmpty(),
+        path = parcel.readString().orEmpty(),
+        isDirectory = parcel.readByte() != 0.toByte(),
+        size = parcel.readLong(),
+        lastModified = parcel.readLong(),
+        mimeType = parcel.readString(),
+        isSmb = parcel.readByte() != 0.toByte(),
+        smbUrl = parcel.readString(),
+        itemType = ItemType.valueOf(parcel.readString() ?: ItemType.FILE.name)
+    )
+
+    override fun writeToParcel(parcel: Parcel, flags: Int) {
+        parcel.writeString(name)
+        parcel.writeString(path)
+        parcel.writeByte(if (isDirectory) 1.toByte() else 0.toByte())
+        parcel.writeLong(size)
+        parcel.writeLong(lastModified)
+        parcel.writeString(mimeType)
+        parcel.writeByte(if (isSmb) 1.toByte() else 0.toByte())
+        parcel.writeString(smbUrl)
+        parcel.writeString(itemType.name)
+    }
+
+    override fun describeContents(): Int = 0
     enum class ItemType {
         FILE, SERVER, SHARE, ADD_BUTTON
     }
@@ -52,7 +76,11 @@ data class FileModel(
             return extension in TEXT_EXTENSIONS
         }
 
-    companion object {
+    companion object CREATOR : Parcelable.Creator<FileModel> {
+        override fun createFromParcel(parcel: Parcel): FileModel = FileModel(parcel)
+
+        override fun newArray(size: Int): Array<FileModel?> = arrayOfNulls(size)
+
         private val TEXT_EXTENSIONS = setOf(
             "txt", "log", "md", "markdown", "rst",
             "json", "xml", "yml", "yaml", "toml", "ini", "conf", "properties", "csv", "tsv",

@@ -1,6 +1,5 @@
 [versions]
 agp = "9.1.0"
-kotlin = "2.1.0"
 coreKtx = "1.12.0"
 junit = "4.13.2"
 junitVersion = "1.1.5"
@@ -49,6 +48,3 @@ prism4j-bundler = { group = "io.noties", name = "prism4j-bundler", version.ref =
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
-kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }

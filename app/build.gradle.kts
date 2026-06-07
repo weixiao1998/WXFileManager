@@ -1,8 +1,5 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.parcelize)
-    alias(libs.plugins.kotlin.kapt)
 }
 
 android {
@@ -47,9 +44,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
 }
 
 dependencies {
@@ -91,7 +85,7 @@ dependencies {
     implementation(libs.prism4j) {
         exclude(group = "org.jetbrains", module = "annotations-java5")
     }
-    kapt(libs.prism4j.bundler) {
+    annotationProcessor(libs.prism4j.bundler) {
         exclude(group = "org.jetbrains", module = "annotations-java5")
     }
 

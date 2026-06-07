@@ -43,8 +43,8 @@
             android:layout_height="20dp"
             android:layout_gravity="center"
             android:src="@android:drawable/ic_media_play"
-            android:tint="@android:color/white"
-            android:visibility="gone" />
+            android:visibility="gone"
+            app:tint="@android:color/white" />
     </FrameLayout>
 
     <TextView

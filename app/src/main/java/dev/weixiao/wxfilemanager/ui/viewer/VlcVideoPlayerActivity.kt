@@ -30,6 +30,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -214,11 +215,9 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         
         supportActionBar?.hide()
         
-        window.statusBarColor = android.graphics.Color.BLACK
-        window.navigationBarColor = android.graphics.Color.BLACK
-        
         binding = ActivityVlcVideoPlayerBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        setupBackPressedHandler()
 
         currentName = intent.getStringExtra("name") ?: ""
         val path = intent.getStringExtra("path") ?: ""
@@ -251,6 +250,19 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         loadVideo(path)
     }
     
+    private fun setupBackPressedHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (isPlaylistPanelVisible) {
+                    hidePlaylistPanel()
+                    return
+                }
+                releaseAllResources()
+                finish()
+            }
+        })
+    }
+
     private fun setupVlcPlayer(): Boolean {
         return try {
             val args = ArrayList<String>().apply {
@@ -2037,13 +2049,4 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         releaseAllResources()
     }
     
-    @Suppress("DEPRECATION")
-    override fun onBackPressed() {
-        if (isPlaylistPanelVisible) {
-            hidePlaylistPanel()
-            return
-        }
-        releaseAllResources()
-        super.onBackPressed()
-    }
 }
