@@ -9,11 +9,11 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -223,9 +223,9 @@ class SmbFragment : Fragment() {
         updateCacheSize(dialogView)
         
         dialogView.btnClearThumbnailCache.setOnClickListener {
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                 com.bumptech.glide.Glide.get(requireContext()).clearDiskCache()
-                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
                     com.bumptech.glide.Glide.get(requireContext()).clearMemory()
                     Toast.makeText(context, "缩略图缓存已清理", Toast.LENGTH_SHORT).show()
                     updateCacheSize(dialogView)
@@ -234,7 +234,7 @@ class SmbFragment : Fragment() {
         }
         
         dialogView.btnClearTempCache.setOnClickListener {
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                 val cacheDir = requireContext().cacheDir
                 val glideCacheDir = java.io.File(cacheDir, "image_manager_disk_cache")
                 
@@ -244,7 +244,7 @@ class SmbFragment : Fragment() {
                     }
                 }
                 
-                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
                     Toast.makeText(context, "临时文件已清理", Toast.LENGTH_SHORT).show()
                     updateCacheSize(dialogView)
                 }
@@ -255,7 +255,7 @@ class SmbFragment : Fragment() {
     }
 
     private fun updateCacheSize(binding: dev.weixiao.wxfilemanager.databinding.DialogViewSettingsBinding) {
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
             val cacheDir = requireContext().cacheDir
             val glideCacheDir = java.io.File(cacheDir, "image_manager_disk_cache")
             
@@ -271,7 +271,7 @@ class SmbFragment : Fragment() {
             val thumbnailSizeStr = android.text.format.Formatter.formatFileSize(requireContext(), thumbnailSize)
             val tempSizeStr = android.text.format.Formatter.formatFileSize(requireContext(), tempSize)
             
-            withContext(kotlinx.coroutines.Dispatchers.Main) {
+            withContext(Dispatchers.Main) {
                 binding.tvThumbnailCacheSize.text = "缩略图缓存: $thumbnailSizeStr"
                 binding.tvTempCacheSize.text = "临时文件: $tempSizeStr"
             }
@@ -477,7 +477,7 @@ class SmbFragment : Fragment() {
 
     private fun downloadAndOpenSmbFile(file: FileModel) {
         binding.loadingIndicator.visibility = View.VISIBLE
-        CoroutineScope(Dispatchers.Main).launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val cachedFile = dev.weixiao.wxfilemanager.utils.FileOpener.downloadSmbFileToCache(requireContext(), file)
             binding.loadingIndicator.visibility = View.GONE
             if (cachedFile != null) {
@@ -493,7 +493,7 @@ class SmbFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         if (viewModel.viewState.value != SmbViewModel.ViewState.SERVERS) {
-            CoroutineScope(Dispatchers.IO).launch {
+            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                 if (!SmbManager.checkAndReconnect()) {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context, "SMB连接已断开，请刷新", Toast.LENGTH_SHORT).show()

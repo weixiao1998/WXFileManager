@@ -37,8 +37,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -361,7 +361,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     }
 
     private fun loadVideoList(currentPath: String, isSmb: Boolean) {
-        CoroutineScope(Dispatchers.IO).launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val parentPath = if (isSmb) {
                     currentPath.replace("/", "\\").substringBeforeLast("\\", "")
@@ -929,7 +929,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     private fun loadVideo(path: String) {
         isTsFile = path.endsWith(".ts", ignoreCase = true)
         
-        CoroutineScope(Dispatchers.IO).launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val uri = if (isSmbFile) {
                     val connInfo = SmbManager.getConnectionInfo()
@@ -1372,7 +1372,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     }
 
     private fun showSubtitleSelectionDialog() {
-        CoroutineScope(Dispatchers.IO).launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             val externalSubtitles = if (isSmbFile) {
                 SmbManager.findSubtitles(currentPath).mapNotNull { f ->
                     f.smbUrl?.let { f.name to it }
@@ -1537,7 +1537,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
     }
 
     private fun showAudioTrackSelectionDialog() {
-        CoroutineScope(Dispatchers.IO).launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             val externalAudios = if (isSmbFile) {
                 SmbManager.findAudioTracks(currentPath).mapNotNull { f ->
                     f.smbUrl?.let { f.name to it }
@@ -1750,7 +1750,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
         val safeName = baseName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
         val fileName = "${safeName}_$timestamp.png"
 
-        CoroutineScope(Dispatchers.IO).launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             val savedLocation = saveBitmapToGallery(bitmap, fileName)
             bitmap.recycle()
             withContext(Dispatchers.Main) {
@@ -2016,7 +2016,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
             isFirstResume = false
         }
         if (isSmbFile) {
-            CoroutineScope(Dispatchers.IO).launch {
+            lifecycleScope.launch(Dispatchers.IO) {
                 SmbManager.checkAndReconnect()
             }
         }

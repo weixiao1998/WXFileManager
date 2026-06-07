@@ -1,9 +1,11 @@
-﻿package dev.weixiao.wxfilemanager
+package dev.weixiao.wxfilemanager
 
 import android.app.Application
+import android.util.Log
 import com.bumptech.glide.Glide
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import dev.weixiao.wxfilemanager.model.FileModel
 import dev.weixiao.wxfilemanager.utils.SmbModelLoader
@@ -11,9 +13,16 @@ import java.io.File
 import java.io.InputStream
 
 class WXApplication : Application() {
+
+    /**
+     * 进程级协程作用域，仅用于无法绑定 UI 生命周期的后台任务（如启动期缓存清理）。
+     * 使用 SupervisorJob 防止单个任务失败影响其它任务。
+     */
+    val applicationScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onCreate() {
         super.onCreate()
-        
+
         ensureCachePrivacy()
         autoClearCache()
 
@@ -32,10 +41,10 @@ class WXApplication : Application() {
         val prefs = getSharedPreferences("app_settings", MODE_PRIVATE)
         val lastClearTime = prefs.getLong("last_cache_clear", 0L)
         val currentTime = System.currentTimeMillis()
-        
+
         // Clear every 7 days or if manually requested (not implemented yet)
         if (currentTime - lastClearTime > 7 * 24 * 60 * 60 * 1000L) {
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            applicationScope.launch {
                 try {
                     val cacheDir = cacheDir
                     val cacheSize = getDirSize(cacheDir)
@@ -44,7 +53,7 @@ class WXApplication : Application() {
                         prefs.edit().putLong("last_cache_clear", currentTime).apply()
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.w(TAG, "auto clear cache failed", e)
                 }
             }
         }
@@ -69,7 +78,7 @@ class WXApplication : Application() {
             if (!nomedia.exists()) {
                 nomedia.createNewFile()
             }
-            
+
             // Also check external cache dir if it exists
             externalCacheDir?.let {
                 val extNomedia = File(it, ".nomedia")
@@ -78,7 +87,11 @@ class WXApplication : Application() {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "ensure cache privacy failed", e)
         }
+    }
+
+    companion object {
+        private const val TAG = "WXApplication"
     }
 }

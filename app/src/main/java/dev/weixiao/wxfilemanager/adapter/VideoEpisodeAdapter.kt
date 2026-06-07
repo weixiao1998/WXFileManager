@@ -16,6 +16,7 @@ import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import dev.weixiao.wxfilemanager.R
@@ -37,6 +38,12 @@ class VideoEpisodeAdapter(
         val tvName: TextView = view.findViewById(R.id.tv_name)
         val tvSize: TextView = view.findViewById(R.id.tv_size)
         val ivPlaying: ImageView = view.findViewById(R.id.iv_playing)
+        var durationLoadJob: Job? = null
+
+        fun cancelDurationLoad() {
+            durationLoadJob?.cancel()
+            durationLoadJob = null
+        }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -101,17 +108,19 @@ class VideoEpisodeAdapter(
     
     private fun loadDuration(holder: ViewHolder, item: FileModel) {
         holder.tvDuration.visibility = View.GONE
-        
+        holder.cancelDurationLoad()
+
         if (item.isSmb) {
             return
         }
-        
-        CoroutineScope(Dispatchers.Main).launch {
+
+        // Use a per-ViewHolder Job that gets cancelled on recycle
+        holder.durationLoadJob = CoroutineScope(Dispatchers.Main + Job()).launch {
             try {
                 val duration = withContext(Dispatchers.IO) {
                     getVideoDuration(item)
                 }
-                
+
                 if (duration != null && holder.bindingAdapterPosition != RecyclerView.NO_POSITION) {
                     holder.tvDuration.text = dateFormat.format(Date(duration))
                     holder.tvDuration.visibility = View.VISIBLE
@@ -160,6 +169,11 @@ class VideoEpisodeAdapter(
         if (position >= 0) {
             notifyItemChanged(position)
         }
+    }
+
+    override fun onViewRecycled(holder: ViewHolder) {
+        super.onViewRecycled(holder)
+        holder.cancelDurationLoad()
     }
 
     class DiffCallback : DiffUtil.ItemCallback<FileModel>() {
