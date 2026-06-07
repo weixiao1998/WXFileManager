@@ -1,4 +1,4 @@
-﻿package dev.weixiao.wxfilemanager.utils
+package dev.weixiao.wxfilemanager.utils
 
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -12,8 +12,14 @@ import com.bumptech.glide.load.model.ModelLoader
 import com.bumptech.glide.load.model.ModelLoaderFactory
 import com.bumptech.glide.load.model.MultiModelLoaderFactory
 import com.bumptech.glide.signature.ObjectKey
-import kotlinx.coroutines.runBlocking
 import dev.weixiao.wxfilemanager.model.FileModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -41,14 +47,20 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
         private val width: Int,
         private val height: Int
     ) : DataFetcher<InputStream> {
+
+        // 用 SupervisorJob 包装的独立 scope，便于在 cancel() 中取消任务
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        private var loadJob: Job? = null
         private var inputStream: InputStream? = null
+        @Volatile
+        private var smbFileRef: com.hierynomus.smbj.share.File? = null
 
         override fun loadData(priority: Priority, callback: DataFetcher.DataCallback<in InputStream>) {
-            try {
-                // If size is 0, try to get real size for better thumbnail generation
-                var currentModel = model
-                if (currentModel.size <= 0 && currentModel.isSmb) {
-                    runBlocking {
+            loadJob = scope.launch {
+                try {
+                    // If size is 0, try to get real size for better thumbnail generation
+                    var currentModel = model
+                    if (currentModel.size <= 0 && currentModel.isSmb) {
                         val share = SmbManager.getDiskShare()
                         if (share != null) {
                             try {
@@ -57,67 +69,62 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
                                     size = info.standardInformation.endOfFile,
                                     lastModified = info.basicInformation.changeTime.toEpochMillis()
                                 )
-                                Log.d("SmbGlideLoader", "Refreshed file info for: ${currentModel.path}, size: ${currentModel.size}")
                             } catch (e: Exception) {
-                                Log.w("SmbGlideLoader", "Failed to refresh file info for: ${currentModel.path}")
+                                Log.w(TAG, "Failed to refresh file info for: ${currentModel.path}")
                             }
                         }
                     }
-                }
 
-                if (currentModel.isVideo) {
-                    val bitmap = runBlocking {
-                        getVideoThumbnail(currentModel, width, height)
-                    }
-                    if (bitmap != null) {
-                        val bos = ByteArrayOutputStream()
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, bos)
-                        val data = bos.toByteArray()
-                        bos.close()
-                        val bis = ByteArrayInputStream(data)
-                        inputStream = bis
-                        callback.onDataReady(bis)
+                    if (currentModel.isVideo) {
+                        val bitmap = getVideoThumbnail(currentModel, width, height)
+                        if (bitmap != null) {
+                            val data = ByteArrayOutputStream().use { bos ->
+                                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, bos)
+                                bos.toByteArray()
+                            }
+                            val bis = ByteArrayInputStream(data)
+                            inputStream = bis
+                            callback.onDataReady(bis)
+                        } else {
+                            callback.onLoadFailed(Exception("Failed to get video thumbnail"))
+                        }
                     } else {
-                        callback.onLoadFailed(Exception("Failed to get video thumbnail"))
+                        val stream = SmbManager.getInputStream(currentModel.path)
+                        if (stream != null) {
+                            val bufferedStream = java.io.BufferedInputStream(stream, 64 * 1024)
+                            inputStream = bufferedStream
+                            callback.onDataReady(bufferedStream)
+                        } else {
+                            callback.onLoadFailed(Exception("Failed to open SMB stream for: ${currentModel.path}"))
+                        }
                     }
-                } else {
-                    val stream = runBlocking {
-                        SmbManager.getInputStream(currentModel.path)
-                    }
-                    if (stream != null) {
-                        // Wrap in BufferedInputStream for better performance and reset support
-                        val bufferedStream = java.io.BufferedInputStream(stream, 64 * 1024)
-                        inputStream = bufferedStream
-                        callback.onDataReady(bufferedStream)
-                    } else {
-                        callback.onLoadFailed(Exception("Failed to open SMB stream for: ${currentModel.path}"))
-                    }
+                } catch (ce: CancellationException) {
+                    // 任务被 Glide 取消，直接返回，cleanup() 会负责释放资源
+                    throw ce
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error loading data for: ${model.path}", e)
+                    callback.onLoadFailed(e)
                 }
-            } catch (e: Exception) {
-                Log.e("SmbGlideLoader", "Error loading data for: ${model.path}", e)
-                callback.onLoadFailed(e)
             }
         }
 
-        private suspend fun getVideoThumbnail(model: FileModel, requestedWidth: Int, requestedHeight: Int): Bitmap? {
+        private fun getVideoThumbnail(model: FileModel, requestedWidth: Int, requestedHeight: Int): Bitmap? {
             val path = model.path
             // Scale up the requested size to support high-density screens
-            // Glide passes dimensions in pixels, but for better clarity, we want more source pixels
-            val scaleFactor = 2 // 2x resolution for better clarity
+            val scaleFactor = 2
             val width = (requestedWidth * scaleFactor).coerceAtLeast(300)
             val height = (requestedHeight * scaleFactor).coerceAtLeast(300)
-            
-            // Log.d("SmbGlideLoader", "Getting video thumbnail for: $path, target size: ${width}x${height}")
+
             val retriever = MediaMetadataRetriever()
             val smbFile = SmbManager.openFile(path) ?: run {
-                Log.e("SmbGlideLoader", "Failed to open SMB file for: $path")
+                Log.e(TAG, "Failed to open SMB file for: $path")
                 return null
             }
-            
+            smbFileRef = smbFile
+
             return try {
                 retriever.setDataSource(object : android.media.MediaDataSource() {
-                    private var readCount = 0
-                    private val buffer = ByteArray(128 * 1024) // 128KB read-ahead buffer
+                    private val buffer = ByteArray(128 * 1024)
                     private var bufferPos = -1L
                     private var bufferSize = 0
 
@@ -125,22 +132,19 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
                     override fun readAt(position: Long, dest: ByteArray, offset: Int, size: Int): Int {
                         if (position >= model.size) return -1
                         if (size == 0) return 0
-                        
-                        // Serve from buffer if possible
+
                         if (position >= bufferPos && position + size <= bufferPos + bufferSize && bufferPos != -1L) {
                             System.arraycopy(buffer, (position - bufferPos).toInt(), dest, offset, size)
                             return size
                         }
 
                         return try {
-                            // If request is larger than our buffer, read directly to destination
                             if (size >= buffer.size) {
                                 readFromSmb(position, dest, offset, size)
                             } else {
-                                // Fill buffer starting at requested position
                                 bufferPos = position
                                 bufferSize = readFromSmb(position, buffer, 0, buffer.size)
-                                
+
                                 if (bufferSize <= 0) {
                                     bufferPos = -1L
                                     -1
@@ -160,12 +164,12 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
                         var curPos = pos
                         var curOff = off
                         var remaining = sz
-                        
+
                         if (curPos + remaining > model.size) {
                             remaining = (model.size - curPos).toInt()
                         }
                         if (remaining <= 0) return -1
-                        
+
                         while (remaining > 0) {
                             val read = smbFile.read(buf, curPos, curOff, remaining)
                             if (read <= 0) break
@@ -182,25 +186,21 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
 
                     override fun close() {}
                 })
-                
-                // Get duration to decide sampling
+
                 val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                 val durationMs = durationStr?.toLongOrNull() ?: 0L
-                
-                // Faster strategy: Only try main points initially with OPTION_CLOSEST_SYNC
+
                 val isAvi = path.lowercase().endsWith(".avi")
                 val timePoints = mutableListOf(1000000L, 5000000L, 0L)
                 if (durationMs > 20000) {
-                    timePoints.add(durationMs * 100L) // 10%
+                    timePoints.add(durationMs * 100L)
                 }
-                
+
                 var bestBitmap: Bitmap? = null
                 var bestScore = -1.0
-                
+
                 for (timeUs in timePoints) {
                     try {
-                        Log.d("SmbGlideLoader", "Trying fast frame at $timeUs us (isAvi: $isAvi)")
-                        // For AVI, OPTION_CLOSEST might be more reliable on some devices
                         val seekOption = if (isAvi && timeUs == 1000000L) {
                             MediaMetadataRetriever.OPTION_CLOSEST
                         } else {
@@ -212,12 +212,11 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
                         } else {
                             retriever.getFrameAtTime(timeUs, seekOption)
                         }
-                        
+
                         if (bitmap != null) {
                             val score = calculateFrameQualityScore(bitmap)
-                            // Log.d("SmbGlideLoader", "Got frame at $timeUs us, quality score: $score")
-                            
-                            if (score > 0.8) { 
+
+                            if (score > 0.8) {
                                 bestBitmap = bitmap
                                 break
                             } else if (score > bestScore) {
@@ -226,21 +225,19 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
                             }
                         }
                     } catch (e: Exception) {
-                        // Log.e("SmbGlideLoader", "Failed fast frame at $timeUs us", e)
+                        // ignore single frame failure
                     }
                 }
-                
-                // Fallback: If no good frame found, try one last time with OPTION_CLOSEST (slower but more accurate)
+
                 if (bestScore < 0.3 && bestBitmap == null) {
                     try {
-                        // Log.d("SmbGlideLoader", "Falling back to slow OPTION_CLOSEST")
                         bestBitmap = retriever.getFrameAtTime(1000000L, MediaMetadataRetriever.OPTION_CLOSEST)
                     } catch (e: Exception) {}
                 }
-                
+
                 bestBitmap
             } catch (e: Exception) {
-                Log.e("SmbGlideLoader", "Error setting data source or getting frame", e)
+                Log.e(TAG, "Error setting data source or getting frame", e)
                 null
             } finally {
                 try {
@@ -249,11 +246,12 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
                 try {
                     smbFile.close()
                 } catch (e: Exception) {}
+                smbFileRef = null
             }
         }
 
         /**
-         * Calculates a quality score for a frame. 
+         * Calculates a quality score for a frame.
          * Returns 0.0 to 1.0, where 1.0 is best.
          * Penalizes all-black, all-white, and any solid-color frames.
          */
@@ -263,7 +261,7 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
             var totalBrightness = 0.0
             val sampleCount = 10
             val pixelBrightnessList = mutableListOf<Double>()
-            
+
             for (i in 0 until sampleCount) {
                 for (j in 0 until sampleCount) {
                     val x = i * (width / sampleCount)
@@ -278,31 +276,21 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
                 }
             }
             val avgBrightness = totalBrightness / (sampleCount * sampleCount)
-            
-            // Calculate standard deviation of brightness to detect solid colors (even non-black/white)
+
             var variance = 0.0
             for (brightness in pixelBrightnessList) {
                 variance += Math.pow(brightness - avgBrightness, 2.0)
             }
             val stdDev = Math.sqrt(variance / pixelBrightnessList.size)
-            
-            // Score based on brightness (bell curve)
+
             val brightnessScore = 1.0 - (Math.abs(avgBrightness - 128.0) / 128.0)
-            
-            // Score based on variance (stdDev): 
-            // - Low stdDev (< 5.0) means it's a solid color (bad)
-            // - High stdDev (> 15.0) means there's visual information (good)
             val varianceScore = (stdDev / 20.0).coerceAtMost(1.0)
-            
-            // Combined score
             val combinedScore = (brightnessScore * 0.4 + varianceScore * 0.6)
-            
-            Log.d("SmbGlideLoader", "Frame avgBrightness: $avgBrightness, stdDev: $stdDev, score: $combinedScore")
-            
+
             return when {
-                avgBrightness < 20.0 -> combinedScore * 0.1 // Too black
-                avgBrightness > 235.0 -> combinedScore * 0.1 // Too white
-                stdDev < 5.0 -> combinedScore * 0.05 // Almost certainly solid color
+                avgBrightness < 20.0 -> combinedScore * 0.1
+                avgBrightness > 235.0 -> combinedScore * 0.1
+                stdDev < 5.0 -> combinedScore * 0.05
                 else -> combinedScore
             }
         }
@@ -311,16 +299,31 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
             try {
                 inputStream?.close()
             } catch (e: Exception) {}
+            inputStream = null
+            try {
+                smbFileRef?.close()
+            } catch (e: Exception) {}
+            smbFileRef = null
         }
 
         override fun cancel() {
-            // runBlocking cannot be easily cancelled from here, 
-            // but cleanup will be called anyway.
+            // 主动取消正在进行的加载任务并关闭底层资源，避免 Glide 滑动取消时仍持续拉流
+            loadJob?.cancel()
+            loadJob = null
+            scope.cancel()
+            try {
+                smbFileRef?.close()
+            } catch (e: Exception) {}
+            smbFileRef = null
         }
 
         override fun getDataClass(): Class<InputStream> = InputStream::class.java
 
         override fun getDataSource(): DataSource = DataSource.REMOTE
+
+        companion object {
+            private const val TAG = "SmbGlideLoader"
+        }
     }
 
     class Factory : ModelLoaderFactory<FileModel, InputStream> {
