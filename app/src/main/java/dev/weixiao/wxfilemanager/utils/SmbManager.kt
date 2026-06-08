@@ -18,11 +18,13 @@ import com.rapid7.client.dcerpc.transport.SMBTransportFactories
 import dev.weixiao.wxfilemanager.model.FileModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.util.EnumSet
+import kotlin.coroutines.coroutineContext
 
 object SmbManager {
     private const val TAG = "SmbManager"
@@ -329,10 +331,13 @@ object SmbManager {
         val results = mutableListOf<FileModel>()
         val share = diskShare ?: return@withContext emptyList()
 
-        fun doSearch(currentPath: String) {
+        suspend fun doSearch(currentPath: String) {
+            // 上层取消（例如新关键字到来或 Activity 销毁）时立即中止递归
+            coroutineContext.ensureActive()
             try {
                 val list = share.list(currentPath).filter { it.fileName != "." && it.fileName != ".." }
                 for (fileInfo in list) {
+                    coroutineContext.ensureActive()
                     val isDirectory = fileInfo.fileAttributes.and(0x10L) != 0L
                     val fileName = fileInfo.fileName
                     val fullPath = if (currentPath.isEmpty()) fileName else "$currentPath\\$fileName"
@@ -356,6 +361,8 @@ object SmbManager {
                         doSearch(fullPath)
                     }
                 }
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
             } catch (e: Exception) {
                 // Skip restricted directories
             }

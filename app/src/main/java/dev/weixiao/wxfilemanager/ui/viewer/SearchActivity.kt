@@ -4,29 +4,46 @@ import android.os.Bundle
 import android.view.MenuItem
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SearchView
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import dev.weixiao.wxfilemanager.adapter.FileAdapter
 import dev.weixiao.wxfilemanager.databinding.ActivitySearchBinding
 import dev.weixiao.wxfilemanager.model.FileModel
 import dev.weixiao.wxfilemanager.utils.SafManager
 import dev.weixiao.wxfilemanager.utils.SmbManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
-
-import android.os.Handler
-import android.os.Looper
-import androidx.appcompat.widget.SearchView
 
 class SearchActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySearchBinding
     private lateinit var adapter: FileAdapter
-    private var searchHandler = Handler(Looper.getMainLooper())
-    private var searchRunnable: Runnable? = null
 
+    /** 搜索关键字状态流，按键变更直接写入此流，由下游 debounce + flatMapLatest 处理 */
+    private val queryFlow = MutableStateFlow("")
+
+    private var rootPath: String = ""
+    private var isSmb: Boolean = false
+
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivitySearchBinding.inflate(layoutInflater)
@@ -36,8 +53,8 @@ class SearchActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.setDisplayShowTitleEnabled(false)
 
-        val path = intent.getStringExtra("path") ?: ""
-        val isSmb = intent.getBooleanExtra("isSmb", false)
+        rootPath = intent.getStringExtra("path") ?: ""
+        isSmb = intent.getBooleanExtra("isSmb", false)
 
         adapter = FileAdapter { file ->
             handleFileClick(file)
@@ -48,65 +65,93 @@ class SearchActivity : AppCompatActivity() {
 
         binding.searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String?): Boolean {
-                query?.let { performSearch(path, it, isSmb) }
+                queryFlow.value = query.orEmpty()
                 return true
             }
 
             override fun onQueryTextChange(newText: String?): Boolean {
-                searchRunnable?.let { searchHandler.removeCallbacks(it) }
-                searchRunnable = Runnable {
-                    newText?.let { if (it.length >= 1) performSearch(path, it, isSmb) }
-                }
-                searchHandler.postDelayed(searchRunnable!!, 500)
+                queryFlow.value = newText.orEmpty()
                 return true
             }
         })
-        
-        // Auto focus search view
-        binding.searchView.requestFocus()
-    }
 
-    private fun performSearch(path: String, query: String, isSmb: Boolean) {
-        binding.progressBar.visibility = View.VISIBLE
+        binding.searchView.requestFocus()
+
+        // 通过 collectLatest + flatMapLatest 保证：每次新关键字进来都会取消上一次未完成的搜索任务，
+        // 不会出现并发多次 SMB 递归把连接打爆的情况。
         lifecycleScope.launch {
-            val results = withContext(Dispatchers.IO) {
-                if (isSmb) {
-                    SmbManager.searchRecursive(path, query)
-                } else {
-                    if (SafManager.isRestrictedPath(path)) {
-                        SafManager.searchRecursive(this@SearchActivity, path, query)
-                    } else {
-                        searchLocalRecursive(File(path), query)
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                queryFlow
+                    .debounce(300)
+                    .distinctUntilChanged()
+                    .filter { it.isNotEmpty() }
+                    .flatMapLatest { query ->
+                        searchAsFlow(rootPath, query, isSmb)
+                            .onStart { showLoading(true) }
+                            .flowOn(Dispatchers.IO)
                     }
-                }
+                    .collectLatest { results ->
+                        adapter.submitList(results)
+                        showLoading(false)
+                        binding.emptyText.visibility =
+                            if (results.isEmpty()) View.VISIBLE else View.GONE
+                    }
             }
-            adapter.submitList(results)
-            binding.progressBar.visibility = View.GONE
-            binding.emptyText.visibility = if (results.isEmpty()) View.VISIBLE else View.GONE
         }
     }
 
-    private fun searchLocalRecursive(dir: File, query: String): List<FileModel> {
+    private fun showLoading(loading: Boolean) {
+        binding.progressBar.visibility = if (loading) View.VISIBLE else View.GONE
+        if (loading) {
+            binding.emptyText.visibility = View.GONE
+        }
+    }
+
+    /**
+     * 把同步的搜索调用包装成 Flow，便于配合 flatMapLatest 实现自动取消。
+     * 内部使用 coroutineScope.ensureActive() 让取消可被及时感知。
+     */
+    private fun searchAsFlow(path: String, query: String, isSmb: Boolean) = flow {
+        val results = if (isSmb) {
+            SmbManager.searchRecursive(path, query)
+        } else {
+            if (SafManager.isRestrictedPath(path)) {
+                SafManager.searchRecursive(this@SearchActivity, path, query)
+            } else {
+                searchLocalRecursive(File(path), query)
+            }
+        }
+        emit(results)
+    }
+
+    /**
+     * 本地文件递归搜索。每访问一个文件前检查协程是否仍 active，
+     * 若已被 flatMapLatest 取消则立即退出，避免无谓 IO。
+     */
+    private suspend fun searchLocalRecursive(dir: File, query: String): List<FileModel> = coroutineScope {
         val results = mutableListOf<FileModel>()
-        dir.walkTopDown().forEach { file ->
+        for (file in dir.walkTopDown()) {
+            ensureActive()
             if (file.name.contains(query, ignoreCase = true) && file.absolutePath != dir.absolutePath) {
                 val isDirectory = file.isDirectory
                 val extension = file.extension.lowercase()
                 val mimeType = if (isDirectory) null else {
                     android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
                 }
-                results.add(FileModel(
-                    name = file.name,
-                    path = file.absolutePath,
-                    isDirectory = isDirectory,
-                    size = if (isDirectory) 0 else file.length(),
-                    lastModified = file.lastModified(),
-                    mimeType = mimeType,
-                    isSmb = false
-                ))
+                results.add(
+                    FileModel(
+                        name = file.name,
+                        path = file.absolutePath,
+                        isDirectory = isDirectory,
+                        size = if (isDirectory) 0 else file.length(),
+                        lastModified = file.lastModified(),
+                        mimeType = mimeType,
+                        isSmb = false
+                    )
+                )
             }
         }
-        return results
+        results
     }
 
     private fun handleFileClick(file: FileModel) {
@@ -120,11 +165,11 @@ class SearchActivity : AppCompatActivity() {
             finish()
             return
         }
-        
+
         if (file.isImage) {
             val imageList = adapter.currentList.filter { it.isImage }
             val position = imageList.indexOfFirst { it.path == file.path }.coerceAtLeast(0)
-            
+
             val intent = android.content.Intent(this, ImageViewerActivity::class.java).apply {
                 putParcelableArrayListExtra("imageList", ArrayList(imageList))
                 putExtra("position", position)
@@ -167,7 +212,9 @@ class SearchActivity : AppCompatActivity() {
     private fun downloadAndOpenSmbFile(file: FileModel) {
         binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch {
-            val cachedFile = dev.weixiao.wxfilemanager.utils.FileOpener.downloadSmbFileToCache(this@SearchActivity, file)
+            val cachedFile = withContext(Dispatchers.IO) {
+                dev.weixiao.wxfilemanager.utils.FileOpener.downloadSmbFileToCache(this@SearchActivity, file)
+            }
             binding.progressBar.visibility = View.GONE
             if (cachedFile != null) {
                 dev.weixiao.wxfilemanager.utils.FileOpener.openCachedFileWithExternalApp(
