@@ -1,4 +1,4 @@
-﻿package dev.weixiao.wxfilemanager
+package dev.weixiao.wxfilemanager
 
 import android.Manifest
 import android.content.Intent
@@ -7,16 +7,19 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
 import dev.weixiao.wxfilemanager.databinding.ActivityMainBinding
+import dev.weixiao.wxfilemanager.viewmodel.MainViewModel
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private val mainViewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,25 +53,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Handle Search and Sort clicks - these will be handled by the current fragment
+        // Handle Search and Sort clicks - delegated to current fragment via shared ViewModel event bus
         binding.btnSearch.setOnClickListener {
-            val fragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment_activity_main)
-                ?.childFragmentManager?.fragments?.firstOrNull()
-            if (fragment is dev.weixiao.wxfilemanager.ui.local.LocalFragment) {
-                fragment.showSearchDialog()
-            } else if (fragment is dev.weixiao.wxfilemanager.ui.smb.SmbFragment) {
-                fragment.showSearchDialog()
-            }
+            mainViewModel.emit(MainViewModel.UiEvent.OpenSearch)
         }
 
         binding.btnSort.setOnClickListener {
-            val fragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment_activity_main)
-                ?.childFragmentManager?.fragments?.firstOrNull()
-            if (fragment is dev.weixiao.wxfilemanager.ui.local.LocalFragment) {
-                fragment.showViewSettingsDialog()
-            } else if (fragment is dev.weixiao.wxfilemanager.ui.smb.SmbFragment) {
-                fragment.showViewSettingsDialog()
-            }
+            mainViewModel.emit(MainViewModel.UiEvent.OpenViewSettings)
         }
 
         // Hide default ActionBar to use custom top bar

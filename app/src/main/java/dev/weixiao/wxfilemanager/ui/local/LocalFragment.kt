@@ -11,8 +11,11 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -31,12 +34,14 @@ import android.util.Log
 import dev.weixiao.wxfilemanager.model.FileModel
 import dev.weixiao.wxfilemanager.utils.SafManager
 import dev.weixiao.wxfilemanager.viewmodel.LocalViewModel
+import dev.weixiao.wxfilemanager.viewmodel.MainViewModel
 
 class LocalFragment : Fragment() {
 
     private var _binding: FragmentFileListBinding? = null
     private val binding get() = _binding!!
     private val viewModel: LocalViewModel by viewModels()
+    private val mainViewModel: MainViewModel by activityViewModels()
     private lateinit var adapter: FileAdapter
     private val loadingRunnable = Runnable { binding.loadingIndicator.visibility = View.VISIBLE }
     
@@ -132,6 +137,19 @@ class LocalFragment : Fragment() {
                 }
             }
         })
+
+        // 只有当前 Fragment 处于 STARTED（即用户可见的 Tab）时才响应顶栏事件，
+        // 避免被切到后台的 Fragment 也弹对话框。
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainViewModel.events.collect { event ->
+                    when (event) {
+                        MainViewModel.UiEvent.OpenSearch -> showSearchDialog()
+                        MainViewModel.UiEvent.OpenViewSettings -> showViewSettingsDialog()
+                    }
+                }
+            }
+        }
     }
 
     private fun showSafPermissionDialog(path: String) {
