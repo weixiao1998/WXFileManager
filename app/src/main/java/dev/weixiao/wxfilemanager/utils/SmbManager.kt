@@ -1,6 +1,7 @@
 package dev.weixiao.wxfilemanager.utils
 
 import android.util.Log
+import android.util.LruCache
 import android.webkit.MimeTypeMap
 import com.hierynomus.msdtyp.AccessMask
 import com.hierynomus.mssmb2.SMB2CreateDisposition
@@ -29,7 +30,10 @@ import kotlin.coroutines.coroutineContext
 object SmbManager {
     private const val TAG = "SmbManager"
 
-    private val client = SMBClient()
+    /** 目录缓存最大条目数，防止长时间浏览造成内存膨胀 */
+    private const val DIRECTORY_CACHE_MAX_ENTRIES = 64
+
+    private var client: SMBClient = SMBClient()
     private var connection: Connection? = null
     private var session: Session? = null
     private var diskShare: DiskShare? = null
@@ -45,7 +49,8 @@ object SmbManager {
     /** 协程协作锁，替代原先的 synchronized 监视器，便于在加锁区内 delay。*/
     private val reconnectMutex = Mutex()
 
-    private val directoryCache = mutableMapOf<String, CacheEntry>()
+    /** LRU 目录缓存：超过 [DIRECTORY_CACHE_MAX_ENTRIES] 条会自动淘汰最久未访问的条目 */
+    private val directoryCache = LruCache<String, CacheEntry>(DIRECTORY_CACHE_MAX_ENTRIES)
     private val cacheLock = Any()
     private val cacheExpiryTime: Long = 30_000L
 
@@ -56,7 +61,7 @@ object SmbManager {
 
     fun clearCache() {
         synchronized(cacheLock) {
-            directoryCache.clear()
+            directoryCache.evictAll()
         }
     }
 
@@ -272,7 +277,7 @@ object SmbManager {
 
         if (useCache) {
             synchronized(cacheLock) {
-                val cached = directoryCache[cacheKey]
+                val cached = directoryCache.get(cacheKey)
                 if (cached != null && System.currentTimeMillis() - cached.timestamp < cacheExpiryTime) {
                     return@withContext cached.files
                 }
@@ -316,7 +321,7 @@ object SmbManager {
                 .sortedWith(compareByDescending<FileModel> { it.isDirectory }.thenBy { it.name.lowercase() })
 
             synchronized(cacheLock) {
-                directoryCache[cacheKey] = CacheEntry(result, System.currentTimeMillis())
+                directoryCache.put(cacheKey, CacheEntry(result, System.currentTimeMillis()))
             }
 
             result
@@ -489,5 +494,14 @@ object SmbManager {
         diskShare = null
         session = null
         connection = null
+
+        // 关闭并重建 SMBClient，释放其内部线程池/连接池等资源；
+        // 重建是为了避免上次握手残留状态影响下一次连接。
+        try {
+            client.close()
+        } catch (e: Exception) {
+            Log.w(TAG, "close client failed", e)
+        }
+        client = SMBClient()
     }
 }
