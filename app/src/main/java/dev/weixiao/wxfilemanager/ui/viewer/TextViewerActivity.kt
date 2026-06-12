@@ -19,6 +19,7 @@ import dev.weixiao.wxfilemanager.utils.SyntaxHighlighter
 import dev.weixiao.wxfilemanager.utils.TextFileLoader
 import kotlinx.coroutines.launch
 import java.nio.charset.Charset
+import java.util.Locale
 
 class TextViewerActivity : AppCompatActivity() {
 
@@ -119,10 +120,10 @@ class TextViewerActivity : AppCompatActivity() {
     private fun formatSize(bytes: Long): String {
         if (bytes < 1024) return "$bytes B"
         val kb = bytes / 1024.0
-        if (kb < 1024) return String.format("%.1f KB", kb)
+        if (kb < 1024) return String.format(Locale.getDefault(), "%.1f KB", kb)
         val mb = kb / 1024.0
-        if (mb < 1024) return String.format("%.1f MB", mb)
-        return String.format("%.2f GB", mb / 1024.0)
+        if (mb < 1024) return String.format(Locale.getDefault(), "%.1f MB", mb)
+        return String.format(Locale.getDefault(), "%.2f GB", mb / 1024.0)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {

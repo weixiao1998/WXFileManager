@@ -1533,7 +1533,8 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
 
     private fun formatSubtitleDelay(delayMs: Long): String {
         val sec = delayMs / 1000.0
-        return if (sec >= 0) "+${String.format("%.1f", sec)}s" else "${String.format("%.1f", sec)}s"
+        return if (sec >= 0) "+${String.format(Locale.getDefault(), "%.1f", sec)}s"
+        else "${String.format(Locale.getDefault(), "%.1f", sec)}s"
     }
 
     private fun showAudioTrackSelectionDialog() {
@@ -1693,7 +1694,8 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
 
     private fun formatAudioDelay(delayUs: Long): String {
         val sec = delayUs / 1_000_000.0
-        return if (sec >= 0) "+${String.format("%.1f", sec)}s" else String.format("%.1f", sec) + "s"
+        return if (sec >= 0) "+${String.format(Locale.getDefault(), "%.1f", sec)}s"
+        else String.format(Locale.getDefault(), "%.1f", sec) + "s"
     }
 
     private fun takeScreenshot() {
