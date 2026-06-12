@@ -212,18 +212,30 @@ class SearchActivity : AppCompatActivity() {
     private fun downloadAndOpenSmbFile(file: FileModel) {
         binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch {
-            val cachedFile = withContext(Dispatchers.IO) {
-                dev.weixiao.wxfilemanager.utils.FileOpener.downloadSmbFileToCache(this@SearchActivity, file)
+            val result = withContext(Dispatchers.IO) {
+                dev.weixiao.wxfilemanager.utils.FileOpener.downloadSmbFile(this@SearchActivity, file)
             }
             binding.progressBar.visibility = View.GONE
-            if (cachedFile != null) {
-                dev.weixiao.wxfilemanager.utils.FileOpener.openCachedFileWithExternalApp(
-                    this@SearchActivity, cachedFile, file.mimeType
-                )
-            } else {
-                android.widget.Toast.makeText(
-                    this@SearchActivity, "下载失败，请检查网络连接", android.widget.Toast.LENGTH_SHORT
-                ).show()
+            when (result) {
+                is dev.weixiao.wxfilemanager.utils.FileOpener.DownloadResult.Success -> {
+                    dev.weixiao.wxfilemanager.utils.FileOpener.openCachedFileWithExternalApp(
+                        this@SearchActivity, result.file, file.mimeType
+                    )
+                }
+                is dev.weixiao.wxfilemanager.utils.FileOpener.DownloadResult.InsufficientSpace -> {
+                    val needStr = android.text.format.Formatter.formatFileSize(this@SearchActivity, result.required)
+                    val haveStr = android.text.format.Formatter.formatFileSize(this@SearchActivity, result.available)
+                    android.widget.Toast.makeText(
+                        this@SearchActivity,
+                        "缓存空间不足（需要 $needStr，剩余 $haveStr），请清理后重试",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+                is dev.weixiao.wxfilemanager.utils.FileOpener.DownloadResult.Failure -> {
+                    android.widget.Toast.makeText(
+                        this@SearchActivity, "下载失败，请检查网络连接", android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
             }
         }
     }

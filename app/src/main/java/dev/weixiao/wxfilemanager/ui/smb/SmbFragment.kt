@@ -491,14 +491,27 @@ class SmbFragment : Fragment() {
     private fun downloadAndOpenSmbFile(file: FileModel) {
         binding.loadingIndicator.visibility = View.VISIBLE
         viewLifecycleOwner.lifecycleScope.launch {
-            val cachedFile = dev.weixiao.wxfilemanager.utils.FileOpener.downloadSmbFileToCache(requireContext(), file)
+            val result = dev.weixiao.wxfilemanager.utils.FileOpener.downloadSmbFile(requireContext(), file)
             binding.loadingIndicator.visibility = View.GONE
-            if (cachedFile != null) {
-                dev.weixiao.wxfilemanager.utils.FileOpener.openCachedFileWithExternalApp(
-                    requireContext(), cachedFile, file.mimeType
-                )
-            } else {
-                Toast.makeText(context, "下载失败，请检查网络连接", Toast.LENGTH_SHORT).show()
+            when (result) {
+                is dev.weixiao.wxfilemanager.utils.FileOpener.DownloadResult.Success -> {
+                    dev.weixiao.wxfilemanager.utils.FileOpener.openCachedFileWithExternalApp(
+                        requireContext(), result.file, file.mimeType
+                    )
+                }
+                is dev.weixiao.wxfilemanager.utils.FileOpener.DownloadResult.InsufficientSpace -> {
+                    val ctx = requireContext()
+                    val needStr = android.text.format.Formatter.formatFileSize(ctx, result.required)
+                    val haveStr = android.text.format.Formatter.formatFileSize(ctx, result.available)
+                    Toast.makeText(
+                        ctx,
+                        "缓存空间不足（需要 $needStr，剩余 $haveStr），请清理后重试",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                is dev.weixiao.wxfilemanager.utils.FileOpener.DownloadResult.Failure -> {
+                    Toast.makeText(context, "下载失败，请检查网络连接", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
