@@ -310,10 +310,6 @@ class SmbFragment : Fragment() {
         file.delete()
     }
 
-    private fun showSortAndViewModeMenu(view: View) {
-        // Redundant
-    }
-
     private fun updateRecyclerViewLayout(mode: FileModel.ViewMode) {
         val isGrid = mode.name.startsWith("GRID")
         if (isGrid) {

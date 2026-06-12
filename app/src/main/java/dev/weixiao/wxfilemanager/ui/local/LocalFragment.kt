@@ -309,10 +309,6 @@ class LocalFragment : Fragment() {
         file.delete()
     }
 
-    private fun showSortAndViewModeMenu(view: View) {
-        // Redundant now, can be removed later
-    }
-
     private fun updateRecyclerViewLayout(mode: FileModel.ViewMode) {
         val isGrid = mode.name.startsWith("GRID")
         if (isGrid) {
