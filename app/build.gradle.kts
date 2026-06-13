@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.parcelize)
 }
 
 android {
@@ -84,6 +85,11 @@ dependencies {
 
     // Encrypted Storage
     implementation(libs.androidx.security.crypto)
+
+    // Parcelize: AGP 9 内置 Kotlin 不会自动连接 parcelize Gradle 插件的 compiler classpath，
+    // 因此需要手动注入 compiler plugin jar，并把 runtime 注解 jar 作为 compileOnly 依赖。
+    "kotlinCompilerPluginClasspath"(libs.kotlin.parcelize.compiler)
+    compileOnly(libs.kotlin.parcelize.runtime)
 
     // Syntax Highlighting
     implementation(libs.prism4j) {
