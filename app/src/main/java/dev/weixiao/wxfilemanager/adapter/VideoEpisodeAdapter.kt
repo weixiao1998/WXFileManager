@@ -2,6 +2,7 @@ package dev.weixiao.wxfilemanager.adapter
 
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -126,7 +127,7 @@ class VideoEpisodeAdapter(
                     holder.tvDuration.visibility = View.VISIBLE
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w(TAG, "bind duration failed for ${item.path}", e)
             }
         }
     }
@@ -139,13 +140,13 @@ class VideoEpisodeAdapter(
             val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
             return duration?.toLongOrNull()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "extract duration failed for ${item.path}", e)
             return null
         } finally {
             try {
                 retriever.release()
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w(TAG, "release retriever failed", e)
             }
         }
     }
@@ -184,5 +185,9 @@ class VideoEpisodeAdapter(
         override fun areContentsTheSame(oldItem: FileModel, newItem: FileModel): Boolean {
             return oldItem == newItem
         }
+    }
+
+    companion object {
+        private const val TAG = "VideoEpisodeAdapter"
     }
 }

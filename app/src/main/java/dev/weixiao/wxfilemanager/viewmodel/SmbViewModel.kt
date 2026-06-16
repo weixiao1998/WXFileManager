@@ -2,6 +2,7 @@ package dev.weixiao.wxfilemanager.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
@@ -174,7 +175,7 @@ class SmbViewModel(application: Application) : AndroidViewModel(application) {
                     _connectSuccess.value = false
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w(TAG, "connect failed", e)
                 _errorMessage.value = "连接失败: ${e.localizedMessage ?: e.message}"
                 _loading.value = false
                 _connected.value = false
@@ -235,7 +236,7 @@ class SmbViewModel(application: Application) : AndroidViewModel(application) {
                 _files.value = list
                 applyFilterAndSort()
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w(TAG, "list files failed for $path", e)
                 _errorMessage.value = "连接已断开，请尝试刷新"
                 _files.value = emptyList()
             } finally {
@@ -347,5 +348,9 @@ class SmbViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         SmbManager.disconnect()
+    }
+
+    companion object {
+        private const val TAG = "SmbViewModel"
     }
 }

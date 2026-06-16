@@ -413,7 +413,7 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                     binding.tvPlaylistTitleLandscape.text = title
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w(TAG, "load episode list failed", e)
             }
         }
     }
