@@ -18,13 +18,18 @@ import com.bumptech.glide.request.transition.Transition
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import dev.weixiao.wxfilemanager.R
 import dev.weixiao.wxfilemanager.model.FileModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 class VideoEpisodeAdapter(
     private val onItemClick: (FileModel, Int) -> Unit
@@ -32,6 +37,7 @@ class VideoEpisodeAdapter(
 
     private var currentPlayingPosition: Int = -1
     private val dateFormat = SimpleDateFormat("mm:ss", Locale.getDefault())
+    private val adapterScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val ivThumbnail: ImageView = view.findViewById(R.id.iv_thumbnail)
@@ -115,23 +121,42 @@ class VideoEpisodeAdapter(
             return
         }
 
-        // Use a per-ViewHolder Job that gets cancelled on recycle
-        holder.durationLoadJob = CoroutineScope(Dispatchers.Main + Job()).launch {
+        // Cache hit: render synchronously, no coroutine needed
+        val cacheKey = cacheKeyOf(item)
+        durationCache[cacheKey]?.let { cached ->
+            applyDuration(holder, cached)
+            return
+        }
+
+        holder.durationLoadJob = adapterScope.launch {
             try {
                 val duration = withContext(Dispatchers.IO) {
-                    getVideoDuration(item)
+                    extractionSemaphore.withPermit {
+                        // Re-check the cache after acquiring permit, in case another
+                        // ViewHolder for the same item finished while we were queued.
+                        durationCache[cacheKey] ?: getVideoDuration(item)?.also {
+                            durationCache[cacheKey] = it
+                        }
+                    }
                 }
 
                 if (duration != null && holder.bindingAdapterPosition != RecyclerView.NO_POSITION) {
-                    holder.tvDuration.text = dateFormat.format(Date(duration))
-                    holder.tvDuration.visibility = View.VISIBLE
+                    applyDuration(holder, duration)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "bind duration failed for ${item.path}", e)
             }
         }
     }
-    
+
+    private fun applyDuration(holder: ViewHolder, duration: Long) {
+        holder.tvDuration.text = dateFormat.format(Date(duration))
+        holder.tvDuration.visibility = View.VISIBLE
+    }
+
+    private fun cacheKeyOf(item: FileModel): String =
+        "${item.path}|${item.lastModified}|${item.size}"
+
     private fun getVideoDuration(item: FileModel): Long? {
         val retriever = MediaMetadataRetriever()
         
@@ -177,6 +202,11 @@ class VideoEpisodeAdapter(
         holder.cancelDurationLoad()
     }
 
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView)
+        adapterScope.cancel()
+    }
+
     class DiffCallback : DiffUtil.ItemCallback<FileModel>() {
         override fun areItemsTheSame(oldItem: FileModel, newItem: FileModel): Boolean {
             return oldItem.path == newItem.path
@@ -189,5 +219,11 @@ class VideoEpisodeAdapter(
 
     companion object {
         private const val TAG = "VideoEpisodeAdapter"
+        private const val MAX_CONCURRENT_EXTRACTIONS = 3
+
+        // Shared across all adapter instances so the cache survives navigation
+        // and concurrent extractions are bounded process-wide.
+        private val extractionSemaphore = Semaphore(MAX_CONCURRENT_EXTRACTIONS)
+        private val durationCache = ConcurrentHashMap<String, Long>()
     }
 }
