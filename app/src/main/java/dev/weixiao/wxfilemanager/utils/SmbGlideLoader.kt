@@ -1,5 +1,6 @@
 package dev.weixiao.wxfilemanager.utils
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.media.MediaMetadataRetriever
@@ -20,11 +21,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 
-class SmbModelLoader : ModelLoader<FileModel, InputStream> {
+class SmbModelLoader(private val context: Context) : ModelLoader<FileModel, InputStream> {
 
     override fun buildLoadData(
         model: FileModel,
@@ -32,17 +34,14 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
         height: Int,
         options: Options
     ): ModelLoader.LoadData<InputStream>? {
-        val nameLower = model.name.lowercase()
-        if (nameLower.endsWith(".avi") || nameLower.endsWith(".wmv")) {
-            return null
-        }
         val cacheKey = "${model.path}_${model.size}"
-        return ModelLoader.LoadData(ObjectKey(cacheKey), SmbDataFetcher(model, width, height))
+        return ModelLoader.LoadData(ObjectKey(cacheKey), SmbDataFetcher(context, model, width, height))
     }
 
     override fun handles(model: FileModel): Boolean = model.isSmb
 
     class SmbDataFetcher(
+        private val context: Context,
         private val model: FileModel,
         private val width: Int,
         private val height: Int
@@ -76,7 +75,18 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
                     }
 
                     if (currentModel.isVideo) {
-                        val bitmap = getVideoThumbnail(currentModel, width, height)
+                        val nameLower = currentModel.name.lowercase()
+                        // AVI/WMV 系 MediaMetadataRetriever 兼容性差，直接走 VLC
+                        val skipMmr = nameLower.endsWith(".avi") ||
+                                nameLower.endsWith(".wmv") ||
+                                nameLower.endsWith(".rmvb") ||
+                                nameLower.endsWith(".rm") ||
+                                nameLower.endsWith(".flv")
+                        var bitmap: Bitmap? = if (skipMmr) null else getVideoThumbnail(currentModel, width, height)
+                        if (bitmap == null) {
+                            // 回退到 libVLC（可解码 Hi10P / HEVC 10bit / AVI 等）
+                            bitmap = getVideoThumbnailByVlc(currentModel, width, height)
+                        }
                         if (bitmap != null) {
                             val data = ByteArrayOutputStream().use { bos ->
                                 bitmap.compress(Bitmap.CompressFormat.JPEG, 95, bos)
@@ -105,6 +115,30 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
                     Log.e(TAG, "Error loading data for: ${model.path}", e)
                     callback.onLoadFailed(e)
                 }
+            }
+        }
+
+        private fun getVideoThumbnailByVlc(model: FileModel, requestedWidth: Int, requestedHeight: Int): Bitmap? {
+            val uri = if (model.isSmb) {
+                SmbManager.buildVlcSmbUri(model.path) ?: run {
+                    Log.w(TAG, "Cannot build VLC SMB uri: ${model.path}")
+                    return null
+                }
+            } else {
+                android.net.Uri.parse("file://${model.path}")
+            }
+            val scaleFactor = 2
+            val w = (requestedWidth * scaleFactor).coerceAtLeast(320)
+            val h = (requestedHeight * scaleFactor).coerceAtLeast(320)
+            return try {
+                runBlocking {
+                    VlcThumbnailExtractor.extract(context, uri, w, h)
+                }
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (e: Exception) {
+                Log.w(TAG, "VLC thumbnail failed: ${model.path}", e)
+                null
             }
         }
 
@@ -326,9 +360,9 @@ class SmbModelLoader : ModelLoader<FileModel, InputStream> {
         }
     }
 
-    class Factory : ModelLoaderFactory<FileModel, InputStream> {
+    class Factory(private val context: Context) : ModelLoaderFactory<FileModel, InputStream> {
         override fun build(multiFactory: MultiModelLoaderFactory): ModelLoader<FileModel, InputStream> {
-            return SmbModelLoader()
+            return SmbModelLoader(context)
         }
 
         override fun teardown() {}

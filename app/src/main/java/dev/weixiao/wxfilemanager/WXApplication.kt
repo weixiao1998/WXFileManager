@@ -30,7 +30,7 @@ class WXApplication : Application() {
         Glide.get(this).registry.append(
             FileModel::class.java,
             InputStream::class.java,
-            SmbModelLoader.Factory()
+            SmbModelLoader.Factory(this)
         )
     }
 

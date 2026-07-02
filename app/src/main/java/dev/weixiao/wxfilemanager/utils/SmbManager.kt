@@ -115,6 +115,22 @@ object SmbManager {
         return ConnectionInfo(host, user, pass, share)
     }
 
+    /**
+     * 构造 VLC 使用的 smb:// URI。VLC 自带 SMB 模块，与 smbj 无关。
+     * 传入的 [path] 应为共享内相对路径（可能使用反斜杠），会自动规范并 URL 编码。
+     */
+    fun buildVlcSmbUri(path: String): android.net.Uri? {
+        val info = getConnectionInfo() ?: return null
+        var relative = path.replace("\\", "/")
+        while (relative.contains("//")) {
+            relative = relative.replace("//", "/")
+        }
+        val encodedPath = android.net.Uri.encode(relative, "/")
+        val encodedUser = android.net.Uri.encode(info.user, "@:/")
+        val encodedPass = android.net.Uri.encode(info.pass, "@:/")
+        return android.net.Uri.parse("smb://$encodedUser:$encodedPass@${info.host}/${info.share}/$encodedPath")
+    }
+
     data class ConnectionInfo(
         val host: String,
         val user: String,
