@@ -21,6 +21,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -42,6 +44,9 @@ class SearchActivity : AppCompatActivity() {
 
     private var rootPath: String = ""
     private var isSmb: Boolean = false
+
+    /** 是否已在当前关键字下弹过"达到上限"提示，避免重复 Toast */
+    private var limitToastShown: Boolean = false
 
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,6 +84,7 @@ class SearchActivity : AppCompatActivity() {
 
         // 通过 collectLatest + flatMapLatest 保证：每次新关键字进来都会取消上一次未完成的搜索任务，
         // 不会出现并发多次 SMB 递归把连接打爆的情况。
+        // 对增量搜索结果使用 sample(200ms) 节流，避免频繁 submitList 卡 UI。
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 queryFlow
@@ -86,15 +92,29 @@ class SearchActivity : AppCompatActivity() {
                     .distinctUntilChanged()
                     .filter { it.isNotEmpty() }
                     .flatMapLatest { query ->
+                        // 每次关键字切换重置"已提示上限"标记
+                        limitToastShown = false
                         searchAsFlow(rootPath, query, isSmb)
-                            .onStart { showLoading(true) }
                             .flowOn(Dispatchers.IO)
+                            .onStart { showLoading(true) }
+                            .conflate()
+                            .sample(200)
                     }
                     .collectLatest { results ->
                         adapter.submitList(results)
                         showLoading(false)
                         binding.emptyText.visibility =
                             if (results.isEmpty()) View.VISIBLE else View.GONE
+                        // 命中数达到上限时提示一次（同一次搜索内只提示一次）
+                        if (isSmb && !limitToastShown &&
+                            results.size >= SmbManager.SEARCH_MAX_RESULTS) {
+                            limitToastShown = true
+                            android.widget.Toast.makeText(
+                                this@SearchActivity,
+                                "结果超过 ${SmbManager.SEARCH_MAX_RESULTS} 条，已停止搜索，请细化关键字",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
                     }
             }
         }
@@ -108,20 +128,21 @@ class SearchActivity : AppCompatActivity() {
     }
 
     /**
-     * 把同步的搜索调用包装成 Flow，便于配合 flatMapLatest 实现自动取消。
-     * 内部使用 coroutineScope.ensureActive() 让取消可被及时感知。
+     * 把搜索调用包装成 Flow，便于配合 flatMapLatest 实现自动取消。
+     * SMB 分支使用 [SmbManager.searchRecursiveFlow] 的增量结果，边搜边刷新。
+     * 本地/SAF 分支保持一次性 emit（本地遍历本身很快）。
      */
     private fun searchAsFlow(path: String, query: String, isSmb: Boolean) = flow {
-        val results = if (isSmb) {
-            SmbManager.searchRecursive(path, query)
+        if (isSmb) {
+            SmbManager.searchRecursiveFlow(path, query).collect { emit(it) }
         } else {
-            if (SafManager.isRestrictedPath(path)) {
+            val results = if (SafManager.isRestrictedPath(path)) {
                 SafManager.searchRecursive(this@SearchActivity, path, query)
             } else {
                 searchLocalRecursive(File(path), query)
             }
+            emit(results)
         }
-        emit(results)
     }
 
     /**

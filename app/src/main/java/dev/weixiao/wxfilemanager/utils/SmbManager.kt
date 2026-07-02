@@ -18,13 +18,20 @@ import com.rapid7.client.dcerpc.mssrvs.dto.NetShareInfo0
 import com.rapid7.client.dcerpc.transport.SMBTransportFactories
 import dev.weixiao.wxfilemanager.model.FileModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.util.EnumSet
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.coroutineContext
 
 object SmbManager {
@@ -347,50 +354,189 @@ object SmbManager {
         }
     }
 
-    suspend fun searchRecursive(path: String, query: String): List<FileModel> = withContext(Dispatchers.IO) {
-        if (!ensureConnected()) return@withContext emptyList()
-        val results = mutableListOf<FileModel>()
-        val share = diskShare ?: return@withContext emptyList()
+    /** 搜索时跳过的系统噪声目录（大小写不敏感匹配） */
+    private val SEARCH_SKIP_DIR_NAMES = setOf(
+        "\$recycle.bin",
+        "\$recycle-bin",
+        "recycle.bin",
+        "recycler",
+        "system volume information",
+        "\$winreagent",
+        "\$sysreset",
+        "config.msi",
+        "found.000",
+        ".ds_store",
+        ".thumbnails",
+        ".trash",
+        ".trash-1000"
+    )
 
-        suspend fun doSearch(currentPath: String) {
-            // 上层取消（例如新关键字到来或 Activity 销毁）时立即中止递归
-            coroutineContext.ensureActive()
-            try {
-                val list = share.list(currentPath).filter { it.fileName != "." && it.fileName != ".." }
-                for (fileInfo in list) {
-                    coroutineContext.ensureActive()
-                    val isDirectory = fileInfo.fileAttributes.and(0x10L) != 0L
-                    val fileName = fileInfo.fileName
-                    val fullPath = if (currentPath.isEmpty()) fileName else "$currentPath\\$fileName"
+    private fun shouldSkipDir(name: String): Boolean {
+        val lower = name.lowercase()
+        if (lower in SEARCH_SKIP_DIR_NAMES) return true
+        // 以 .Trash- 开头的 Linux 回收站目录
+        if (lower.startsWith(".trash-")) return true
+        return false
+    }
 
-                    if (fileName.contains(query, ignoreCase = true)) {
-                        val extension = fileName.substringAfterLast('.', "").lowercase()
-                        val mimeType = if (isDirectory) null else MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
-                        results.add(FileModel(
-                            name = fileName,
-                            path = fullPath,
-                            isDirectory = isDirectory,
-                            size = fileInfo.endOfFile,
-                            lastModified = fileInfo.changeTime.toEpochMillis(),
-                            mimeType = mimeType,
-                            isSmb = true,
-                            smbUrl = "smb://$fullPath"
-                        ))
-                    }
+    /** 搜索结果上限，达到后停止遍历 */
+    const val SEARCH_MAX_RESULTS = 500
 
-                    if (isDirectory) {
-                        doSearch(fullPath)
-                    }
-                }
-            } catch (ce: kotlinx.coroutines.CancellationException) {
-                throw ce
-            } catch (e: Exception) {
-                // Skip restricted directories
-            }
+    /** 目录并发遍历度 */
+    private const val SEARCH_CONCURRENCY = 6
+
+    /**
+     * 流式增量搜索：每积累一定数量或每完成一个目录就发射一次已命中的结果。
+     * 收集端可用 conflate/sample 节流刷新，避免频繁 submitList。
+     *
+     * 特性：
+     *  - 增量 emit：首批结果 ~百毫秒级可见，不再"整棵树扫完才出"
+     *  - 跳过系统噪声目录（$RECYCLE.BIN 等）
+     *  - 有界并发（Semaphore）：多目录并行 list，深目录显著加速
+     *  - 结果上限：命中 [SEARCH_MAX_RESULTS] 后停止，避免 UI 被压垮
+     *  - 优先读取 [directoryCache] 中已缓存的目录，无需再走网络
+     */
+    fun searchRecursiveFlow(path: String, query: String): Flow<List<FileModel>> = channelFlow {
+        if (!ensureConnected()) {
+            send(emptyList())
+            return@channelFlow
+        }
+        val share = diskShare ?: run {
+            send(emptyList())
+            return@channelFlow
         }
 
-        doSearch(path)
-        results
+        val results = mutableListOf<FileModel>()
+        val resultsLock = Mutex()
+        val reachedLimit = AtomicBoolean(false)
+        val semaphore = Semaphore(SEARCH_CONCURRENCY)
+
+        suspend fun tryEmitSnapshot() {
+            val snapshot = resultsLock.withLock { results.toList() }
+            send(snapshot)
+        }
+
+        // 使用 coroutineScope 让并发子任务共享结构化并发；任一失败/取消都会向上传播
+        coroutineScope {
+            suspend fun doSearch(currentPath: String) {
+                if (reachedLimit.get()) return
+                coroutineContext.ensureActive()
+
+                val list = try {
+                    semaphore.withPermit {
+                        // 优先复用已缓存的目录（若在缓存有效期内）
+                        val cacheKey = getCacheKey(currentPath)
+                        val cached = synchronized(cacheLock) {
+                            directoryCache.get(cacheKey)?.takeIf {
+                                System.currentTimeMillis() - it.timestamp < cacheExpiryTime
+                            }
+                        }
+                        if (cached != null) {
+                            // 缓存里的 FileModel 已经解析好，直接过滤匹配即可
+                            null to cached.files
+                        } else {
+                            val raw = share.list(currentPath)
+                                .filter { it.fileName != "." && it.fileName != ".." }
+                            raw to null
+                        }
+                    }
+                } catch (ce: kotlinx.coroutines.CancellationException) {
+                    throw ce
+                } catch (e: Exception) {
+                    // 权限受限等，跳过
+                    return
+                }
+
+                val (rawList, cachedFiles) = list
+                val childDirs = mutableListOf<String>()
+                var hitInThisDir = false
+
+                if (cachedFiles != null) {
+                    // 走缓存分支
+                    for (f in cachedFiles) {
+                        if (reachedLimit.get()) return
+                        coroutineContext.ensureActive()
+                        if (f.isDirectory && shouldSkipDir(f.name)) continue
+
+                        if (f.name.contains(query, ignoreCase = true)) {
+                            val added = resultsLock.withLock {
+                                if (results.size >= SEARCH_MAX_RESULTS) {
+                                    reachedLimit.set(true)
+                                    false
+                                } else {
+                                    results.add(f)
+                                    true
+                                }
+                            }
+                            if (added) hitInThisDir = true else return
+                        }
+                        if (f.isDirectory) childDirs.add(f.path)
+                    }
+                } else {
+                    // 走原始 FileIdBothDirectoryInformation 分支
+                    for (fileInfo in rawList!!) {
+                        if (reachedLimit.get()) return
+                        coroutineContext.ensureActive()
+                        val isDirectory = fileInfo.fileAttributes.and(0x10L) != 0L
+                        val fileName = fileInfo.fileName
+
+                        if (isDirectory && shouldSkipDir(fileName)) continue
+
+                        val fullPath = if (currentPath.isEmpty()) fileName else "$currentPath\\$fileName"
+
+                        if (fileName.contains(query, ignoreCase = true)) {
+                            val extension = fileName.substringAfterLast('.', "").lowercase()
+                            val mimeType = if (isDirectory) null
+                                else MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+                            val model = FileModel(
+                                name = fileName,
+                                path = fullPath,
+                                isDirectory = isDirectory,
+                                size = fileInfo.endOfFile,
+                                lastModified = fileInfo.changeTime.toEpochMillis(),
+                                mimeType = mimeType,
+                                isSmb = true,
+                                smbUrl = "smb://$fullPath"
+                            )
+                            val added = resultsLock.withLock {
+                                if (results.size >= SEARCH_MAX_RESULTS) {
+                                    reachedLimit.set(true)
+                                    false
+                                } else {
+                                    results.add(model)
+                                    true
+                                }
+                            }
+                            if (added) hitInThisDir = true else return
+                        }
+
+                        if (isDirectory) childDirs.add(fullPath)
+                    }
+                }
+
+                if (hitInThisDir) tryEmitSnapshot()
+
+                // 并发下探子目录
+                val jobs = childDirs.map { child ->
+                    launch { doSearch(child) }
+                }
+                jobs.forEach { it.join() }
+            }
+
+            doSearch(path)
+        }
+
+        // 最终快照，保证收集端至少能拿到完整结果一次
+        tryEmitSnapshot()
+    }
+
+    /**
+     * 兼容旧调用方的一次性搜索。内部收集流式版本并返回最终列表。
+     */
+    suspend fun searchRecursive(path: String, query: String): List<FileModel> {
+        var last: List<FileModel> = emptyList()
+        searchRecursiveFlow(path, query).collect { last = it }
+        return last
     }
 
     suspend fun getInputStream(path: String): InputStream? = withContext(Dispatchers.IO) {
