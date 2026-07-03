@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "dev.weixiao.wxfilemanager"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "dev.weixiao.wxfilemanager"
@@ -15,7 +15,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        
+
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
@@ -64,6 +64,10 @@ dependencies {
     
     // Video Playback
     implementation(libs.libvlc.all)
+    
+    // FFmpeg thumbnail (supports Hi10P, 10-bit formats)
+    implementation(libs.ffmpegretriever.core)
+    implementation(libs.ffmpegretriever.native)
     
     // Coroutines
     implementation(libs.coroutines.android)

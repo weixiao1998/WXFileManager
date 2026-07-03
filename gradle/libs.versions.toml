@@ -12,6 +12,7 @@ dcerpc = "0.12.13"
 gson = "2.10.1"
 glide = "4.16.0"
 libvlc = "3.6.5"
+ffmpegRetriever = "1.0.22"
 coroutines = "1.7.3"
 lifecycle = "2.7.0"
 navigation = "2.7.7"
@@ -37,6 +38,8 @@ gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
 glide-compiler = { group = "com.github.bumptech.glide", name = "compiler", version.ref = "glide" }
 libvlc-all = { group = "org.videolan.android", name = "libvlc-all", version.ref = "libvlc" }
+ffmpegretriever-core = { group = "com.github.wseemann", name = "FFmpegMediaMetadataRetriever-core", version.ref = "ffmpegRetriever" }
+ffmpegretriever-native = { group = "com.github.wseemann", name = "FFmpegMediaMetadataRetriever-native", version.ref = "ffmpegRetriever" }
 coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
 lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }

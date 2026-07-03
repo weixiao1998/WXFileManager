@@ -84,8 +84,8 @@ class SmbModelLoader(private val context: Context) : ModelLoader<FileModel, Inpu
                                 nameLower.endsWith(".flv")
                         var bitmap: Bitmap? = if (skipMmr) null else getVideoThumbnail(currentModel, width, height)
                         if (bitmap == null) {
-                            // 回退到 libVLC（可解码 Hi10P / HEVC 10bit / AVI 等）
-                            bitmap = getVideoThumbnailByVlc(currentModel, width, height)
+                            // FFmpeg 回退（支持 Hi10P / HEVC 10bit 等）
+                            bitmap = getVideoThumbnailByFfmpeg(currentModel, width, height)
                         }
                         if (bitmap != null) {
                             val data = ByteArrayOutputStream().use { bos ->
@@ -118,7 +118,7 @@ class SmbModelLoader(private val context: Context) : ModelLoader<FileModel, Inpu
             }
         }
 
-        private fun getVideoThumbnailByVlc(model: FileModel, requestedWidth: Int, requestedHeight: Int): Bitmap? {
+        private fun getVideoThumbnailByFfmpeg(model: FileModel, requestedWidth: Int, requestedHeight: Int): Bitmap? {
             val uri = if (model.isSmb) {
                 SmbManager.buildVlcSmbUri(model.path) ?: run {
                     Log.w(TAG, "Cannot build VLC SMB uri: ${model.path}")
@@ -132,7 +132,7 @@ class SmbModelLoader(private val context: Context) : ModelLoader<FileModel, Inpu
             val h = (requestedHeight * scaleFactor).coerceAtLeast(320)
             return try {
                 runBlocking {
-                    VlcThumbnailExtractor.extract(context, uri, w, h)
+                    extract(context, uri, w, h)
                 }
             } catch (ce: CancellationException) {
                 throw ce
