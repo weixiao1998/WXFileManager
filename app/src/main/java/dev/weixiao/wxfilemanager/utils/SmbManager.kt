@@ -275,6 +275,8 @@ object SmbManager {
 
     suspend fun connectShare(share: String): Boolean = withContext(Dispatchers.IO) {
         if (!ensureConnected()) return@withContext false
+        // 已连接到同一共享时直接返回，避免 close 重建导致并发操作失败
+        if (diskShare != null && lastShare == share) return@withContext true
         val currentSession = session ?: return@withContext false
         try {
             diskShare?.close()

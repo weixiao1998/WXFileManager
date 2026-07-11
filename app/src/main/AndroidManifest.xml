@@ -53,6 +53,12 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <provider
+            android:name=".FfmpegThumbProvider"
+            android:authorities="${applicationId}.ffmpeg_thumb"
+            android:exported="false"
+            android:process=":ffmpeg_thumb" />
     </application>
 
 </manifest>
