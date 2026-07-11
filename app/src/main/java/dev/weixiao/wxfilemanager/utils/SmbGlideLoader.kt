@@ -75,16 +75,10 @@ class SmbModelLoader(private val context: Context) : ModelLoader<FileModel, Inpu
                     }
 
                     if (currentModel.isVideo) {
-                        val nameLower = currentModel.name.lowercase()
-                        // AVI/WMV 系 MediaMetadataRetriever 兼容性差，直接走 VLC
-                        val skipMmr = nameLower.endsWith(".avi") ||
-                                nameLower.endsWith(".wmv") ||
-                                nameLower.endsWith(".rmvb") ||
-                                nameLower.endsWith(".rm") ||
-                                nameLower.endsWith(".flv")
-                        var bitmap: Bitmap? = if (skipMmr) null else getVideoThumbnail(currentModel, width, height)
+                        // 先尝试 MMR（通过 MediaDataSource 随机访问完整文件，不受截断影响）
+                        var bitmap: Bitmap? = getVideoThumbnail(currentModel, width, height)
                         if (bitmap == null) {
-                            // FFmpeg 回退（支持 Hi10P / HEVC 10bit 等）
+                            // FFmpeg 回退（支持 Hi10P / HEVC 10bit 等 MMR 不支持的格式）
                             bitmap = getVideoThumbnailByFfmpeg(currentModel, width, height)
                         }
                         if (bitmap != null) {

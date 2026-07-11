@@ -47,18 +47,26 @@ class FfmpegThumbProvider : ContentProvider() {
             val outW = width.coerceIn(160, 720)
             val outH = height.coerceIn(160, 720)
 
-            var bmp = retriever.getScaledFrameAtTime(
-                1_000_000,
-                FFmpegMediaMetadataRetriever.OPTION_CLOSEST,
-                outW, outH
-            )
-            if (bmp == null) {
-                bmp = retriever.getFrameAtTime(
-                    1_000_000,
-                    FFmpegMediaMetadataRetriever.OPTION_CLOSEST
-                )
+            val timePoints = longArrayOf(5_000_000L, 2_000_000L, 1_000_000L, 0L)
+            var bmp: Bitmap? = null
+            for (timeUs in timePoints) {
+                bmp = try {
+                    retriever.getScaledFrameAtTime(
+                        timeUs,
+                        FFmpegMediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                        outW, outH
+                    )
+                } catch (_: Exception) { null }
+                if (bmp != null) break
+                bmp = try {
+                    retriever.getFrameAtTime(
+                        timeUs,
+                        FFmpegMediaMetadataRetriever.OPTION_CLOSEST
+                    )
+                } catch (_: Exception) { null }
                 if (bmp != null) {
                     bmp = Bitmap.createScaledBitmap(bmp, outW, outH, true)
+                    break
                 }
             }
 

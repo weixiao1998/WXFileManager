@@ -26,6 +26,7 @@ import java.io.FileOutputStream
 
 private const val TAG = "FfmpegThumbExtractor"
 private const val SMB_HEADER_SIZE = 5 * 1024 * 1024L
+private const val SMB_HEADER_SIZE_LARGE = 20 * 1024 * 1024L
 private const val PROVIDER_AUTHORITY = "dev.weixiao.wxfilemanager.ffmpeg_thumb"
 
 suspend fun extract(
@@ -97,7 +98,12 @@ private fun copySmbHeader(context: Context, uri: Uri): File? {
         val f = smb.openFile(filePath) ?: return null
         return try {
             val fileSize = f.getFileInformation().standardInformation.endOfFile
-            val copySize = minOf(SMB_HEADER_SIZE, fileSize)
+            // AVI/WMV 等格式索引可能在文件尾，需要更大头部
+            val headerSize = if (filePath.lowercase().let {
+                    it.endsWith(".avi") || it.endsWith(".wmv") ||
+                    it.endsWith(".rmvb") || it.endsWith(".rm") || it.endsWith(".flv")
+                }) SMB_HEADER_SIZE_LARGE else SMB_HEADER_SIZE
+            val copySize = minOf(headerSize, fileSize)
             val buf = ByteArray(copySize.toInt())
             var totalRead = 0
             while (totalRead < copySize) {
