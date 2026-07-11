@@ -276,7 +276,6 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
             }
             
             libVLC = LibVLC(this.applicationContext, args)
-            Log.d(TAG, "LibVLC初始化成功")
             
             mediaPlayer = MediaPlayer(libVLC).apply {
                 setEventListener { event ->
@@ -285,7 +284,6 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                             showProgressBar()
                         }
                         MediaPlayer.Event.Playing -> {
-                            Log.d(TAG, "开始播放")
                             hideProgressBar()
                             updatePlayPauseButton(true)
                             if (restorePosition >= 0) {
@@ -311,7 +309,6 @@ class VlcVideoPlayerActivity : AppCompatActivity() {
                             stopProgressUpdate()
                         }
                         MediaPlayer.Event.EndReached -> {
-                            Log.d(TAG, "播放结束")
                             handler.post { handleEndReached() }
                         }
                         MediaPlayer.Event.EncounteredError -> {

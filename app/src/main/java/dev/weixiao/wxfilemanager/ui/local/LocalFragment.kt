@@ -384,18 +384,15 @@ class LocalFragment : Fragment() {
         val position = layoutManager.findFirstVisibleItemPosition()
         if (position != RecyclerView.NO_POSITION) {
             scrollPositions[currentPath] = position
-            Log.d("LocalFragment", "saveScrollPosition: path=$currentPath, position=$position")
         }
     }
     
     private fun restoreScrollPosition() {
         val currentPath = viewModel.currentPath.value ?: return
         val position = scrollPositions[currentPath]
-        Log.d("LocalFragment", "restoreScrollPosition: path=$currentPath, savedPosition=$position, allPositions=$scrollPositions")
         if (position != null) {
             val layoutManager = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return
             layoutManager.scrollToPositionWithOffset(position, 0)
-            Log.d("LocalFragment", "restoreScrollPosition done: position=$position")
         }
     }
 

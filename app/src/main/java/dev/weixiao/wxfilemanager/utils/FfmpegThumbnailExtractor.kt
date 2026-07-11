@@ -113,7 +113,6 @@ private fun copySmbHeader(context: Context, uri: Uri): File? {
             }
             if (totalRead > 0) {
                 FileOutputStream(tmp).use { it.write(buf, 0, totalRead) }
-                Log.d(TAG, "SMB header copied: $totalRead bytes")
                 tmp
             } else {
                 tmp.delete()
